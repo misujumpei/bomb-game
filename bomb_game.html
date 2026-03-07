@@ -34,7 +34,15 @@
     .btn-red    { background: #c42020; color: #fff; }
     .btn-green  { background: #1a7a1a; color: #fff; }
     .btn-gray   { background: #2a2a32; color: #aaa; border: 1px solid #3a3a44; }
-    .btn-yellow { background: #8a7000; color: #ffe; }
+
+    .text-input {
+      width: 100%; padding: 13px 16px; margin-bottom: 18px;
+      background: #16161e; border: 1px solid #3a3a44; border-radius: 8px;
+      color: #fff; font-family: 'Courier New', monospace; font-size: 1rem;
+      text-align: center;
+    }
+    .text-input::placeholder { color: #3a3a4a; }
+    .text-input:focus { outline: none; border-color: #5a5a6e; }
 
     .pulse { animation: pulse 1.4s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
@@ -47,7 +55,7 @@
       text-shadow: 0 0 24px #ff282888, 0 0 60px #ff000044;
       margin-bottom: 4px;
     }
-    .title-wrap .subtitle { color: #555; font-size: 0.82rem; margin-bottom: 40px; }
+    .title-wrap .subtitle { color: #555; font-size: 0.82rem; margin-bottom: 28px; }
 
     .divider { text-align: center; color: #333; margin: 16px 0; font-size: 0.8rem; }
 
@@ -73,7 +81,21 @@
       text-shadow: 0 0 24px #f0c02066;
       margin: 12px 0 6px;
     }
-    .wait-info { color: #555; font-size: 0.82rem; margin-bottom: 28px; }
+    .wait-info { color: #555; font-size: 0.82rem; margin-bottom: 16px; }
+    .wait-name  { color: #888; font-size: 0.9rem; margin-bottom: 20px; }
+
+    /* ===== PLAYERS BAR ===== */
+    .players-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 10px; margin-bottom: 14px;
+      background: #0a0a10; border-radius: 8px;
+      font-size: 0.78rem;
+    }
+    .player-tag { display: flex; align-items: center; gap: 5px; color: #444; }
+    .player-tag .pname {
+      color: #888; max-width: 100px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
 
     /* ===== TIMER ===== */
     .timer {
@@ -178,6 +200,7 @@
     .result-wrap { text-align: center; }
     .result-emoji { font-size: 5rem; margin-bottom: 16px; }
     .result-heading { font-size: 2rem; font-weight: 900; margin-bottom: 8px; }
+    .result-names { color: #666; font-size: 0.82rem; margin-bottom: 6px; }
     .result-sub { color: #555; font-size: 0.88rem; margin-bottom: 36px; }
 
     /* ===== COUNTDOWN OVERLAY ===== */
@@ -218,6 +241,7 @@
   <div class="title-wrap">
     <h1>BOMB</h1>
     <p class="subtitle">2人で協力して爆弾を解除せよ</p>
+    <input id="name-input" class="text-input" placeholder="ニックネームを入力" maxlength="10">
     <button class="btn btn-red" onclick="becomeHost()">ホストになる（爆弾係）</button>
     <div class="divider">─── または ───</div>
     <div class="input-row">
@@ -234,6 +258,7 @@
     <p class="section-label">YOUR ROOM CODE</p>
     <div class="room-code" id="room-code-display"></div>
     <p class="wait-info">このコードを相手に伝えてください</p>
+    <p class="wait-name">あなた：<span id="host-name-disp" style="color:#ccc"></span>（爆弾係）</p>
     <p class="wait-info pulse" id="guest-status">相手の参加を待っています...</p>
     <button id="start-btn" class="btn btn-red" onclick="startGame()" disabled style="margin-top:8px">
       ゲーム開始
@@ -245,7 +270,7 @@
 <div id="screen-guest-wait" class="screen">
   <div class="wait-wrap">
     <p style="font-size:3rem;margin-bottom:20px">📖</p>
-    <p style="color:#666;margin-bottom:10px">ルームに参加しました</p>
+    <p class="wait-name">あなた：<span id="guest-name-disp" style="color:#ccc"></span>（マニュアル係）</p>
     <p class="wait-info pulse">ホストがゲームを開始するまで待っています...</p>
   </div>
 </div>
@@ -253,6 +278,10 @@
 <!-- ===== BOMB PANEL (HOST) ===== -->
 <div id="screen-bomb" class="screen">
   <div class="bomb-panel">
+    <div class="players-bar">
+      <div class="player-tag">💣 <span class="pname" id="bomb-pname-host"></span></div>
+      <div class="player-tag">📖 <span class="pname" id="bomb-pname-guest"></span></div>
+    </div>
     <div class="bomb-header">
       <div>
         <div class="panel-label">EXPLOSIVE DEVICE</div>
@@ -268,6 +297,10 @@
 <!-- ===== MANUAL (GUEST) ===== -->
 <div id="screen-manual" class="screen">
   <div class="manual-panel">
+    <div class="players-bar" style="background:#0a100a">
+      <div class="player-tag">💣 <span class="pname" id="manual-pname-host"></span></div>
+      <div class="player-tag">📖 <span class="pname" id="manual-pname-guest"></span></div>
+    </div>
     <div class="manual-header">
       <div class="manual-title-text">DEFUSAL MANUAL</div>
       <div class="timer" id="timer-guest">90</div>
@@ -282,6 +315,7 @@
   <div class="result-wrap">
     <div class="result-emoji" id="result-emoji"></div>
     <div class="result-heading" id="result-heading"></div>
+    <p class="result-names" id="result-names"></p>
     <p class="result-sub" id="result-sub"></p>
     <button class="btn btn-gray" onclick="backToTitle()">タイトルに戻る</button>
   </div>
@@ -312,7 +346,7 @@ const WIRES = [
 ];
 const DURATION = 90;
 
-let roomId, role, roomRef, timerHandle;
+let roomId, role, roomRef, timerHandle, myName;
 let timerStarted = false, gameStarted = false, resultShown = false;
 
 function shuffle(arr) {
@@ -329,18 +363,27 @@ function showScreen(id) {
   document.getElementById('screen-' + id).classList.add('active');
 }
 
+function getName() {
+  return document.getElementById('name-input').value.trim() || 'ゲスト';
+}
+
 // ===== HOST =====
 async function becomeHost() {
+  myName = getName();
   roomId = Math.random().toString(36).slice(2, 6).toUpperCase();
-  role = 'host';
+  role   = 'host';
   roomRef = db.ref('rooms/' + roomId);
-  await roomRef.set({ state: 'waiting', guestReady: false });
+  await roomRef.set({ state: 'waiting', hostName: myName, guestReady: false });
+
   document.getElementById('room-code-display').textContent = roomId;
+  document.getElementById('host-name-disp').textContent = myName;
   showScreen('host-wait');
 
-  roomRef.child('guestReady').on('value', snap => {
-    if (snap.val()) {
-      document.getElementById('guest-status').textContent = '✅ 相手が参加しました！';
+  roomRef.on('value', snap => {
+    const d = snap.val();
+    if (!d) return;
+    if (d.guestReady && d.guestName) {
+      document.getElementById('guest-status').textContent = `✅ ${d.guestName}さんが参加しました！`;
       document.getElementById('guest-status').classList.remove('pulse');
       document.getElementById('start-btn').disabled = false;
     }
@@ -358,6 +401,7 @@ async function startGame() {
 
 // ===== GUEST =====
 async function joinRoom() {
+  myName = getName();
   const code = document.getElementById('room-input').value.toUpperCase().trim();
   if (code.length !== 4) { alert('4文字のコードを入力してください'); return; }
   const snap = await db.ref('rooms/' + code).get();
@@ -365,10 +409,12 @@ async function joinRoom() {
     alert('ルームが見つかりません、またはすでに開始されています');
     return;
   }
-  roomId = code;
-  role = 'guest';
+  roomId  = code;
+  role    = 'guest';
   roomRef = db.ref('rooms/' + roomId);
-  await roomRef.child('guestReady').set(true);
+  await roomRef.update({ guestReady: true, guestName: myName });
+
+  document.getElementById('guest-name-disp').textContent = myName;
   showScreen('guest-wait');
   watchState();
 }
@@ -394,11 +440,11 @@ function watchState() {
     } else if (data.state === 'success' && !resultShown) {
       resultShown = true;
       clearTimeout(timerHandle);
-      setTimeout(() => showResult(true), 200);
+      setTimeout(() => showResult(true, data), 200);
     } else if (data.state === 'failed' && gameStarted && !resultShown) {
       resultShown = true;
       clearTimeout(timerHandle);
-      flashRed(() => showResult(false));
+      flashRed(() => showResult(false, data));
     }
   });
 }
@@ -431,6 +477,10 @@ function renderBomb(data) {
   if (!document.getElementById('screen-bomb').classList.contains('active')) {
     showScreen('bomb');
   }
+
+  document.getElementById('bomb-pname-host').textContent  = data.hostName  || 'ホスト';
+  document.getElementById('bomb-pname-guest').textContent = data.guestName || 'ゲスト';
+
   const cuts = data.cuts || [];
   document.getElementById('progress-info').textContent = `${cuts.length} / ${WIRES.length} 切断済み`;
 
@@ -445,9 +495,7 @@ function renderBomb(data) {
     div.style.setProperty('--wc-glow', wire.glow);
     div.innerHTML = `
       <span class="wire-num">${i + 1}</span>
-      <div class="wire-cable-wrap">
-        <div class="wire-cable"></div>
-      </div>
+      <div class="wire-cable-wrap"><div class="wire-cable"></div></div>
       <span class="wire-scissors">✂</span>
     `;
     if (!isCut) div.onclick = () => cutWire(wireId, data);
@@ -475,6 +523,10 @@ function renderManual(data) {
   if (!document.getElementById('screen-manual').classList.contains('active')) {
     showScreen('manual');
   }
+
+  document.getElementById('manual-pname-host').textContent  = data.hostName  || 'ホスト';
+  document.getElementById('manual-pname-guest').textContent = data.guestName || 'ゲスト';
+
   const cuts = data.cuts || [];
   const seq  = document.getElementById('sequence-display');
   seq.innerHTML = data.sequence.map((wireId, i) => {
@@ -536,13 +588,17 @@ function flashRed(cb) {
   }, 80);
 }
 
-function showResult(success) {
+function showResult(success, data) {
+  const h = (data && data.hostName)  || 'ホスト';
+  const g = (data && data.guestName) || 'ゲスト';
+
   document.getElementById('result-emoji').textContent   = success ? '🎉' : '💥';
   document.getElementById('result-heading').textContent = success ? '解除成功！！' : '爆発...';
-  document.getElementById('result-sub').textContent     = success
-    ? 'さすが！2人の連携は完璧だ'
-    : '残念... もう一度挑戦しよう';
   document.getElementById('result-heading').style.color = success ? '#5aff5a' : '#ff4444';
+  document.getElementById('result-names').textContent   = `${h} と ${g}`;
+  document.getElementById('result-sub').textContent     = success
+    ? '2人の連携は完璧だった！'
+    : 'もう一度挑戦しよう';
   showScreen('result');
 }
 
