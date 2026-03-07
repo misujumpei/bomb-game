@@ -115,37 +115,52 @@
       border-radius: 4px; background: #1a1a22; color: #666; margin-bottom: 10px;
     }
 
-    /* BUTTON PAD */
-    .btn-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr);
-      gap: 10px; margin: 14px 0;
+    /* PIN DISPLAY (host) */
+    .pin-display {
+      display: flex; justify-content: center; gap: 10px; margin: 14px 0 10px;
     }
-    .pad-btn {
-      aspect-ratio: 1; border: 2px solid #3a3a44; border-radius: 10px;
-      background: #1a1a22; color: #ccc; font-size: 1.5rem; font-weight: 900;
-      font-family: 'Courier New', monospace; cursor: pointer;
-      transition: all 0.1s; display: flex; align-items: center; justify-content: center;
+    .pin-digit {
+      width: 48px; height: 58px; border-radius: 8px; border: 2px solid #3a3a44;
+      background: #1a1a22; display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; font-weight: 900; color: #fff; transition: all 0.15s;
     }
-    .pad-btn:hover:not(.pressed):not(.wrong) { background: #22222e; border-color: #5a5a6e; }
-    .pad-btn:active:not(.pressed):not(.wrong) { transform: scale(0.93); }
-    .pad-btn.pressed { background: #1a3a1a; border-color: #3a7a3a; color: #5aff5a; }
-    .pad-btn.wrong   { background: #3a1a1a; border-color: #7a3a3a; color: #ff5a5a; animation: shake 0.3s; }
-    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+    .pin-digit.empty { border-style: dashed; color: #333; }
+    .pin-digit.active { border-color: #6a6aaa; box-shadow: 0 0 10px #6a6aaa44; }
+    .pin-digit.wrong { background: #2a1010; border-color: #aa3030; animation: shake 0.35s; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-7px)} 75%{transform:translateX(7px)} }
 
-    /* BUTTON SEQUENCE (guest) */
-    .seq-target {
-      display: flex; justify-content: center; gap: 16px; margin: 20px 0;
+    /* NUMPAD (host) */
+    .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+    .num-btn {
+      padding: 15px 0; border: 2px solid #3a3a44; border-radius: 8px;
+      background: #1a1a22; color: #ccc; font-size: 1.4rem; font-weight: 900;
+      font-family: 'Courier New', monospace; cursor: pointer; transition: all 0.1s; text-align: center;
     }
-    .seq-target-num {
-      width: 58px; height: 58px; border-radius: 10px; border: 2px solid #3a5a3a;
-      background: #101810; display: flex; align-items: center; justify-content: center;
-      font-size: 1.8rem; font-weight: 900; color: #5aff5a; position: relative;
+    .num-btn:hover { background: #22222e; border-color: #5a5a6e; }
+    .num-btn:active { transform: scale(0.94); }
+    .num-btn.del { font-size: 1rem; color: #ff8080; border-color: #3a2020; }
+    .num-btn.wide { grid-column: span 2; }
+
+    /* MATH PROBLEM (guest) */
+    .math-box {
+      background: #0a100a; border: 2px solid #1e4a1e; border-radius: 12px;
+      padding: 22px 18px; margin: 12px 0; text-align: center;
     }
-    .seq-target-num .seq-idx {
-      position: absolute; top: 3px; right: 6px; font-size: 0.6rem; color: #2a5a2a;
+    .math-label { font-size: 0.65rem; letter-spacing: 3px; color: #2a5a2a; margin-bottom: 12px; }
+    .math-expr {
+      font-size: 1.7rem; font-weight: 900; color: #5aff5a;
+      text-shadow: 0 0 12px #5aff5a44; margin-bottom: 8px; line-height: 1.5;
     }
-    .seq-target-num.done { opacity: 0.35; text-decoration: line-through; }
-    .seq-target-num.current { border-color: #5aff5a; box-shadow: 0 0 14px #5aff5a44; animation: pulse 1s infinite; }
+    .math-blank { font-size: 1.5rem; color: #888; }
+    .math-hint { color: #2a5a2a; font-size: 0.75rem; margin-top: 10px; }
+    .math-progress {
+      display: flex; justify-content: center; gap: 8px; margin-top: 14px;
+    }
+    .math-prog-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #1a2a1a; border: 1px solid #2a4a2a; transition: all 0.2s;
+    }
+    .math-prog-dot.filled { background: #3a8a3a; border-color: #5aaa5a; }
 
     /* WIRE LIST */
     .wire-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
@@ -326,8 +341,9 @@
       <div class="timer" id="timer-bp1">80</div>
     </div>
     <div class="phase-badge">フェーズ 1 / 2</div>
-    <div class="btn-grid" id="button-pad"></div>
-    <div class="bomb-hint">マニュアル係の指示通りにボタンを押せ</div>
+    <div class="pin-display" id="pin-display"></div>
+    <div class="numpad" id="numpad"></div>
+    <div class="bomb-hint">マニュアル係の答えを入力せよ</div>
   </div>
 </div>
 
@@ -365,9 +381,13 @@
       <div class="timer" id="timer-mp1">80</div>
     </div>
     <div class="phase-badge" style="text-align:center;color:#2a5a2a">フェーズ 1 / 2</div>
-    <p class="manual-sub" style="margin-top:8px">この番号をこの順番で押させろ</p>
-    <div class="seq-target" id="btn-target-display"></div>
-    <p style="text-align:center;color:#2a4a2a;font-size:0.72rem;margin-top:12px">ホストに「何番のボタンがあるか」など聞きながら指示せよ</p>
+    <div class="math-box" id="math-box">
+      <div class="math-label">━ 暗証番号 ━</div>
+      <div class="math-expr" id="math-expr"></div>
+      <div class="math-blank">= ?</div>
+      <div class="math-hint">暗算して答えをホストに伝えよ（ホストが入力する）</div>
+      <div class="math-progress" id="math-progress"></div>
+    </div>
   </div>
 </div>
 
@@ -537,6 +557,29 @@ function renderRoundBar(elId, round, results) {
     }).join('');
 }
 
+// ===== MATH PROBLEM =====
+function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+function generateMathProblem() {
+  const templates = [
+    () => { const a=rand(3,9),b=rand(3,9),c=rand(8,35); return {expr:`${a} × ${b} + ${c}`, ans:a*b+c}; },
+    () => { const a=rand(4,9),b=rand(4,9),p=a*b,c=rand(5,p-12); return p-c>=10?{expr:`${a} × ${b} - ${c}`, ans:p-c}:null; },
+    () => { const c=rand(3,7),a=rand(5,14),b=rand(5,14); return {expr:`(${a} + ${b}) × ${c}`, ans:(a+b)*c}; },
+    () => { const a=rand(2,7),b=rand(3,8),c=rand(2,6),d=rand(3,7); return {expr:`${a} × ${b} + ${c} × ${d}`, ans:a*b+c*d}; },
+    () => { const b=rand(2,6),a=b*rand(4,10),c=rand(3,7),d=rand(3,7); return {expr:`${a} ÷ ${b} + ${c} × ${d}`, ans:a/b+c*d}; },
+    () => { const a=rand(5,9),b=rand(5,9),c=rand(2,4),d=rand(2,4); const v=a*b-c*d; return v>=15?{expr:`${a} × ${b} - ${c} × ${d}`, ans:v}:null; },
+    () => { const a=rand(10,30),b=rand(2,6),c=rand(10,30); return {expr:`${a} × ${b} - ${c}`, ans:a*b-c}; },
+  ];
+  let r;
+  let tries = 0;
+  do {
+    r = templates[Math.floor(Math.random()*templates.length)]();
+    tries++;
+    if (tries > 50) { r = {expr:'7 × 8 + 34', ans:90}; break; }
+  } while (!r || r.ans < 10 || r.ans > 999 || !Number.isInteger(r.ans));
+  return { expr: r.expr, answer: String(r.ans) };
+}
+
 // ===== GAME DATA GENERATION =====
 function generateWireOrder(count) {
   const ids = WIRES.map(w => w.id);
@@ -598,7 +641,7 @@ async function startRound(round, results, cleared, failed) {
   const wireOrder = generateWireOrder(wireCount);
   const baseSeq   = shuffle([...wireOrder]);
   const rule      = generateRule(wireOrder, baseSeq);
-  const btnTarget = shuffle([1,2,3,4,5,6,7,8,9]).slice(0, 3);
+  const math = generateMathProblem();
   const startTime = Date.now() + 5000;
 
   await roomRef.update({
@@ -609,8 +652,9 @@ async function startRound(round, results, cleared, failed) {
     results: results || {},
     clearedCount: cleared,
     failedCount: failed,
-    btnTarget,
-    btnPresses: [],
+    mathExpr: math.expr,
+    mathAnswer: math.answer,
+    pinEntry: '',
     wireOrder,
     wireSequence: rule.correctSeq,
     wireCuts: [],
@@ -655,7 +699,7 @@ function handleStateChange(data) {
     }
   }
 
-  const key = data.state + '_' + data.round + '_' + JSON.stringify(data.btnPresses) + '_' + JSON.stringify(data.wireCuts);
+  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + JSON.stringify(data.wireCuts);
   if (key === lastDataStr) return;
   lastDataStr = key;
 
@@ -684,7 +728,7 @@ function runCountdown(startTime, phaseName, cb) {
   tick();
 }
 
-// ===== PHASE 1: BUTTON PAD =====
+// ===== PHASE 1: PIN / MATH =====
 function enterPhase1(data) {
   stopBGM();
   timerStarted = false;
@@ -694,10 +738,10 @@ function enterPhase1(data) {
     phaseRendered = 'p1';
     if (role === 'host') {
       showScreen('bomb-p1');
-      renderButtonPad(data);
+      renderPinPad(data);
     } else {
       showScreen('manual-p1');
-      renderButtonTarget(data);
+      renderMathProblem(data);
     }
     startTimer(data.startTime, data.duration);
     startBGM(550);
@@ -710,60 +754,83 @@ function enterPhase1(data) {
   }
 }
 
-function renderButtonPad(data) {
-  const presses = data.btnPresses || [];
+function renderPinPad(data) {
   ['bp1-host','bp1-guest'].forEach((id, i) => {
     document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
   });
   renderRoundBar('round-bar-bp1', data.round, data.results);
-  document.getElementById('btn-progress').textContent = `${presses.length} / ${data.btnTarget.length} 入力済み`;
 
-  const pad = document.getElementById('button-pad');
-  pad.innerHTML = '';
+  const entry  = data.pinEntry || '';
+  const total  = data.mathAnswer.length;
+  document.getElementById('btn-progress').textContent = `${entry.length} / ${total} 桁入力済み`;
+
+  // PIN display
+  const pinEl = document.getElementById('pin-display');
+  pinEl.innerHTML = data.mathAnswer.split('').map((_, i) => {
+    const filled = i < entry.length;
+    const active = i === entry.length;
+    return `<div class="pin-digit ${filled ? '' : 'empty'} ${active ? 'active' : ''}">${filled ? entry[i] : '─'}</div>`;
+  }).join('');
+
+  // Numpad: 1-9, then DEL + 0
+  const numpad = document.getElementById('numpad');
+  numpad.innerHTML = '';
   for (let n = 1; n <= 9; n++) {
-    const pressed = presses.includes(n);
     const btn = document.createElement('button');
-    btn.className = 'pad-btn' + (pressed ? ' pressed' : '');
-    btn.textContent = n;
-    if (!pressed) btn.onclick = () => pressButton(n, data);
-    pad.appendChild(btn);
+    btn.className = 'num-btn'; btn.textContent = n;
+    btn.onclick = () => enterDigit(String(n), data);
+    numpad.appendChild(btn);
   }
+  const delBtn = document.createElement('button');
+  delBtn.className = 'num-btn del'; delBtn.textContent = '←';
+  delBtn.onclick = () => deleteDigit(data);
+
+  const zeroBtn = document.createElement('button');
+  zeroBtn.className = 'num-btn wide'; zeroBtn.textContent = '0';
+  zeroBtn.onclick = () => enterDigit('0', data);
+
+  numpad.appendChild(delBtn);
+  numpad.appendChild(zeroBtn);
 }
 
-async function pressButton(n, data) {
+async function enterDigit(digit, data) {
   playClick();
-  const presses = [...(data.btnPresses || []), n];
-  const step = presses.length - 1;
-  if (data.btnTarget[step] !== n) {
-    // Wrong button
-    const btn = [...document.getElementById('button-pad').children][n - 1];
-    btn.classList.add('wrong');
-    playError();
-    setTimeout(async () => { await roomRef.update({ state: 'round-end', roundResult: 'failed' }); }, 400);
+  const entry = (data.pinEntry || '') + digit;
+  if (entry.length < data.mathAnswer.length) {
+    await roomRef.update({ pinEntry: entry });
     return;
   }
-  if (presses.length === data.btnTarget.length) {
-    await roomRef.update({ btnPresses: presses, state: 'phase2' });
+  // All digits entered — validate
+  if (entry === data.mathAnswer) {
+    await roomRef.update({ pinEntry: entry, state: 'phase2' });
   } else {
-    await roomRef.update({ btnPresses: presses });
+    // Wrong answer — flash digits red then clear
+    document.querySelectorAll('.pin-digit').forEach(el => el.classList.add('wrong'));
+    playError();
+    setTimeout(() => roomRef.update({ pinEntry: '' }), 600);
   }
 }
 
-function renderButtonTarget(data) {
-  const presses = data.btnPresses || [];
+async function deleteDigit(data) {
+  const entry = (data.pinEntry || '').slice(0, -1);
+  await roomRef.update({ pinEntry: entry });
+}
+
+function renderMathProblem(data) {
   ['mp1-host','mp1-guest'].forEach((id, i) => {
     document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
   });
   renderRoundBar('round-bar-mp1', data.round, data.results);
 
-  const disp = document.getElementById('btn-target-display');
-  disp.innerHTML = data.btnTarget.map((n, i) => {
-    const done    = i < presses.length;
-    const current = i === presses.length;
-    return `<div class="seq-target-num ${done ? 'done' : ''} ${current ? 'current' : ''}">
-      <span class="seq-idx">${i + 1}</span>${n}
-    </div>`;
-  }).join('');
+  document.getElementById('math-expr').textContent = data.mathExpr;
+
+  // Progress dots showing how many digits host has entered (without revealing digits)
+  const entry = data.pinEntry || '';
+  const total = data.mathAnswer.length;
+  document.getElementById('math-progress').innerHTML =
+    Array.from({length: total}, (_, i) =>
+      `<div class="math-prog-dot ${i < entry.length ? 'filled' : ''}"></div>`
+    ).join('');
 }
 
 // ===== PHASE 2: WIRES =====
