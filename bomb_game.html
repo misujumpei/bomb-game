@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>BOMB DEFUSAL</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d12;
+      color: #c8c8c8;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .screen { display: none; width: 100%; max-width: 440px; }
+    .screen.active { display: block; }
+
+    /* ===== COMMON ===== */
+    .btn {
+      display: block; width: 100%; padding: 14px;
+      border: none; border-radius: 8px;
+      font-size: 1rem; font-family: 'Courier New', monospace;
+      cursor: pointer; font-weight: bold;
+      letter-spacing: 1px; transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:active:not(:disabled) { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+    .btn-red    { background: #c42020; color: #fff; }
+    .btn-green  { background: #1a7a1a; color: #fff; }
+    .btn-gray   { background: #2a2a32; color: #aaa; border: 1px solid #3a3a44; }
+    .btn-yellow { background: #8a7000; color: #ffe; }
+
+    .pulse { animation: pulse 1.4s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+    /* ===== TITLE ===== */
+    .title-wrap { text-align: center; }
+    .title-wrap h1 {
+      font-size: 3rem; font-weight: 900; letter-spacing: 6px;
+      color: #ff2828;
+      text-shadow: 0 0 24px #ff282888, 0 0 60px #ff000044;
+      margin-bottom: 4px;
+    }
+    .title-wrap .subtitle { color: #555; font-size: 0.82rem; margin-bottom: 40px; }
+
+    .divider { text-align: center; color: #333; margin: 16px 0; font-size: 0.8rem; }
+
+    .input-row { display: flex; gap: 8px; margin-top: 12px; }
+    .input-row input {
+      flex: 1; padding: 14px; background: #16161e;
+      border: 1px solid #3a3a44; border-radius: 8px;
+      color: #fff; font-family: 'Courier New', monospace;
+      font-size: 1.4rem; letter-spacing: 6px; text-transform: uppercase;
+      text-align: center;
+    }
+    .input-row input:focus { outline: none; border-color: #5a5a6e; }
+    .input-row .btn { width: auto; padding: 14px 20px; }
+
+    .role-hint { font-size: 0.72rem; color: #3a3a4a; text-align: center; margin-top: 6px; }
+
+    /* ===== WAITING ===== */
+    .wait-wrap { text-align: center; }
+    .section-label { font-size: 0.7rem; letter-spacing: 3px; color: #444; margin-bottom: 8px; }
+    .room-code {
+      font-size: 3.6rem; font-weight: 900; letter-spacing: 14px;
+      color: #f0c020;
+      text-shadow: 0 0 24px #f0c02066;
+      margin: 12px 0 6px;
+    }
+    .wait-info { color: #555; font-size: 0.82rem; margin-bottom: 28px; }
+
+    /* ===== TIMER ===== */
+    .timer {
+      font-size: 2.6rem; font-weight: 900;
+      color: #ff3030; font-family: 'Courier New', monospace;
+      text-shadow: 0 0 12px #ff303066;
+      transition: color 0.3s;
+    }
+    .timer.warn   { color: #ff8800; text-shadow: 0 0 12px #ff880066; }
+    .timer.danger { color: #ff1818; animation: blink 0.5s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
+    /* ===== BOMB PANEL ===== */
+    .bomb-panel {
+      background: #111116;
+      border: 2px solid #2c2c36;
+      border-radius: 14px;
+      padding: 22px 20px;
+      box-shadow: 0 0 40px #00000099, inset 0 0 20px #00000044;
+    }
+    .bomb-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #222;
+      padding-bottom: 14px;
+    }
+    .panel-label { font-size: 0.65rem; letter-spacing: 3px; color: #3a3a44; }
+    .progress-info { font-size: 0.75rem; color: #555; }
+
+    .wire-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+
+    .wire-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 16px;
+      background: #18181e; border: 1px solid #28282e;
+      border-radius: 10px; cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, transform 0.1s;
+    }
+    .wire-item:hover:not(.cut) { background: #20202a; border-color: #404050; }
+    .wire-item:active:not(.cut) { transform: scale(0.98); }
+    .wire-item.cut { opacity: 0.38; cursor: default; }
+
+    .wire-num { font-size: 0.72rem; color: #44444e; min-width: 18px; }
+
+    .wire-cable-wrap {
+      flex: 1; height: 10px; position: relative;
+      display: flex; align-items: center;
+    }
+    .wire-cable {
+      width: 100%; height: 8px; border-radius: 4px;
+      background: var(--wc);
+      box-shadow: 0 0 8px var(--wc-glow);
+    }
+    .wire-item.cut .wire-cable {
+      background: repeating-linear-gradient(
+        90deg, var(--wc) 0 44%, #111116 44% 56%, var(--wc) 56% 100%
+      );
+      box-shadow: none;
+    }
+    .wire-scissors { font-size: 1.2rem; color: #555; transition: color 0.12s; }
+    .wire-item:not(.cut):hover .wire-scissors { color: #aaa; }
+    .wire-item.cut .wire-scissors { color: #333; }
+
+    .bomb-hint { text-align: center; color: #3a3a44; font-size: 0.75rem; }
+
+    /* ===== MANUAL ===== */
+    .manual-panel {
+      background: #0c160c;
+      border: 2px solid #1e3a1e;
+      border-radius: 14px;
+      padding: 22px 20px;
+      box-shadow: 0 0 40px #00000099;
+    }
+    .manual-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #152015;
+      padding-bottom: 14px;
+    }
+    .manual-title-text { font-size: 0.65rem; letter-spacing: 3px; color: #2a5a2a; }
+    .manual-sub { color: #1e3a1e; font-size: 0.72rem; margin-bottom: 18px; text-align: center; }
+
+    .seq-list { display: flex; flex-direction: column; gap: 10px; }
+    .seq-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 13px 16px; border-radius: 10px;
+      background: #101810; border: 1px solid #182018;
+      transition: all 0.2s;
+    }
+    .seq-item.current {
+      background: #142014; border-color: #2e5a2e;
+      box-shadow: 0 0 16px #00ff0018;
+    }
+    .seq-item.done { opacity: 0.3; }
+
+    .seq-num { font-size: 0.72rem; color: #2a4a2a; min-width: 20px; }
+    .seq-color-name { font-size: 1.15rem; font-weight: bold; flex: 1; }
+    .seq-arrow { color: #3a7a3a; font-size: 0.75rem; animation: pulse 1s infinite; }
+    .seq-check { color: #2a5a2a; }
+
+    /* ===== RESULT ===== */
+    .result-wrap { text-align: center; }
+    .result-emoji { font-size: 5rem; margin-bottom: 16px; }
+    .result-heading { font-size: 2rem; font-weight: 900; margin-bottom: 8px; }
+    .result-sub { color: #555; font-size: 0.88rem; margin-bottom: 36px; }
+
+    /* ===== COUNTDOWN OVERLAY ===== */
+    #countdown-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88);
+      align-items: center; justify-content: center;
+      z-index: 100; flex-direction: column; gap: 12px;
+    }
+    #countdown-overlay.show { display: flex; }
+    #countdown-label { font-size: 0.8rem; letter-spacing: 4px; color: #555; }
+    #countdown-num {
+      font-size: 9rem; font-weight: 900;
+      color: #ff2828;
+      text-shadow: 0 0 50px #ff282899;
+      animation: pop 0.8s ease-out;
+    }
+    @keyframes pop { from{transform:scale(1.8);opacity:0} to{transform:scale(1);opacity:1} }
+
+    /* ===== FLASH ===== */
+    #flash {
+      display: none; position: fixed; inset: 0;
+      background: #ff1818; z-index: 200; pointer-events: none; opacity: 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Countdown Overlay -->
+<div id="countdown-overlay">
+  <div id="countdown-label">GAME START IN</div>
+  <div id="countdown-num">3</div>
+</div>
+<div id="flash"></div>
+
+<!-- ===== TITLE ===== -->
+<div id="screen-title" class="screen active">
+  <div class="title-wrap">
+    <h1>BOMB</h1>
+    <p class="subtitle">2人で協力して爆弾を解除せよ</p>
+    <button class="btn btn-red" onclick="becomeHost()">ホストになる（爆弾係）</button>
+    <div class="divider">─── または ───</div>
+    <div class="input-row">
+      <input id="room-input" placeholder="XXXX" maxlength="4">
+      <button class="btn btn-green" onclick="joinRoom()">参加</button>
+    </div>
+    <p class="role-hint">ルームコードを入力して参加（マニュアル係）</p>
+  </div>
+</div>
+
+<!-- ===== HOST WAITING ===== -->
+<div id="screen-host-wait" class="screen">
+  <div class="wait-wrap">
+    <p class="section-label">YOUR ROOM CODE</p>
+    <div class="room-code" id="room-code-display"></div>
+    <p class="wait-info">このコードを相手に伝えてください</p>
+    <p class="wait-info pulse" id="guest-status">相手の参加を待っています...</p>
+    <button id="start-btn" class="btn btn-red" onclick="startGame()" disabled style="margin-top:8px">
+      ゲーム開始
+    </button>
+  </div>
+</div>
+
+<!-- ===== GUEST WAITING ===== -->
+<div id="screen-guest-wait" class="screen">
+  <div class="wait-wrap">
+    <p style="font-size:3rem;margin-bottom:20px">📖</p>
+    <p style="color:#666;margin-bottom:10px">ルームに参加しました</p>
+    <p class="wait-info pulse">ホストがゲームを開始するまで待っています...</p>
+  </div>
+</div>
+
+<!-- ===== BOMB PANEL (HOST) ===== -->
+<div id="screen-bomb" class="screen">
+  <div class="bomb-panel">
+    <div class="bomb-header">
+      <div>
+        <div class="panel-label">EXPLOSIVE DEVICE</div>
+        <div class="progress-info" id="progress-info">0 / 5 切断済み</div>
+      </div>
+      <div class="timer" id="timer-host">90</div>
+    </div>
+    <div class="wire-list" id="wire-panel"></div>
+    <div class="bomb-hint">ワイヤーをタップして切断 ✂</div>
+  </div>
+</div>
+
+<!-- ===== MANUAL (GUEST) ===== -->
+<div id="screen-manual" class="screen">
+  <div class="manual-panel">
+    <div class="manual-header">
+      <div class="manual-title-text">DEFUSAL MANUAL</div>
+      <div class="timer" id="timer-guest">90</div>
+    </div>
+    <p class="manual-sub">この順番でワイヤーを切るよう相手に伝えよ</p>
+    <div class="seq-list" id="sequence-display"></div>
+  </div>
+</div>
+
+<!-- ===== RESULT ===== -->
+<div id="screen-result" class="screen">
+  <div class="result-wrap">
+    <div class="result-emoji" id="result-emoji"></div>
+    <div class="result-heading" id="result-heading"></div>
+    <p class="result-sub" id="result-sub"></p>
+    <button class="btn btn-gray" onclick="backToTitle()">タイトルに戻る</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDR6pdYJj-bxhzFlaFJqTjcgGuL0T1JQwI",
+  authDomain: "bomb-game-a2a07.firebaseapp.com",
+  databaseURL: "https://bomb-game-a2a07-default-rtdb.firebaseio.com",
+  projectId: "bomb-game-a2a07",
+  storageBucket: "bomb-game-a2a07.firebasestorage.app",
+  messagingSenderId: "876219180928",
+  appId: "1:876219180928:web:4f6f924c57199da3328365"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const WIRES = [
+  { id: 'red',    name: '赤',  color: '#e03030', glow: '#e0303066' },
+  { id: 'blue',   name: '青',  color: '#3070e8', glow: '#3070e866' },
+  { id: 'yellow', name: '黄',  color: '#d4b800', glow: '#d4b80066' },
+  { id: 'green',  name: '緑',  color: '#28b028', glow: '#28b02866' },
+  { id: 'white',  name: '白',  color: '#cccccc', glow: '#cccccc44' },
+];
+const DURATION = 90;
+
+let roomId, role, roomRef, timerHandle;
+let timerStarted = false, gameStarted = false, resultShown = false;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+// ===== HOST =====
+async function becomeHost() {
+  roomId = Math.random().toString(36).slice(2, 6).toUpperCase();
+  role = 'host';
+  roomRef = db.ref('rooms/' + roomId);
+  await roomRef.set({ state: 'waiting', guestReady: false });
+  document.getElementById('room-code-display').textContent = roomId;
+  showScreen('host-wait');
+
+  roomRef.child('guestReady').on('value', snap => {
+    if (snap.val()) {
+      document.getElementById('guest-status').textContent = '✅ 相手が参加しました！';
+      document.getElementById('guest-status').classList.remove('pulse');
+      document.getElementById('start-btn').disabled = false;
+    }
+  });
+  watchState();
+}
+
+async function startGame() {
+  document.getElementById('start-btn').disabled = true;
+  const wireOrder = shuffle(WIRES.map(w => w.id));
+  const sequence  = shuffle(WIRES.map(w => w.id));
+  const startTime = Date.now() + 4500;
+  await roomRef.update({ state: 'playing', wireOrder, sequence, startTime, cuts: [] });
+}
+
+// ===== GUEST =====
+async function joinRoom() {
+  const code = document.getElementById('room-input').value.toUpperCase().trim();
+  if (code.length !== 4) { alert('4文字のコードを入力してください'); return; }
+  const snap = await db.ref('rooms/' + code).get();
+  if (!snap.exists() || snap.val().state !== 'waiting') {
+    alert('ルームが見つかりません、またはすでに開始されています');
+    return;
+  }
+  roomId = code;
+  role = 'guest';
+  roomRef = db.ref('rooms/' + roomId);
+  await roomRef.child('guestReady').set(true);
+  showScreen('guest-wait');
+  watchState();
+}
+
+// ===== WATCH STATE =====
+function watchState() {
+  roomRef.on('value', snap => {
+    const data = snap.val();
+    if (!data) return;
+
+    if (data.state === 'playing') {
+      if (!gameStarted) {
+        gameStarted = true;
+        runCountdown(data.startTime, () => {
+          if (role === 'host') renderBomb(data);
+          else renderManual(data);
+          startTimer(data.startTime);
+        });
+      } else {
+        if (role === 'host') renderBomb(data);
+        else renderManual(data);
+      }
+    } else if (data.state === 'success' && !resultShown) {
+      resultShown = true;
+      clearTimeout(timerHandle);
+      setTimeout(() => showResult(true), 200);
+    } else if (data.state === 'failed' && gameStarted && !resultShown) {
+      resultShown = true;
+      clearTimeout(timerHandle);
+      flashRed(() => showResult(false));
+    }
+  });
+}
+
+// ===== COUNTDOWN =====
+function runCountdown(startTime, cb) {
+  const overlay = document.getElementById('countdown-overlay');
+  const numEl   = document.getElementById('countdown-num');
+  overlay.classList.add('show');
+
+  const tick = () => {
+    const left = (startTime - Date.now()) / 1000;
+    if (left <= 0) {
+      overlay.classList.remove('show');
+      cb();
+      return;
+    }
+    const n = Math.ceil(left);
+    numEl.textContent = n;
+    numEl.style.animation = 'none';
+    void numEl.offsetHeight;
+    numEl.style.animation = 'pop 0.8s ease-out';
+    setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+// ===== RENDER BOMB =====
+function renderBomb(data) {
+  if (!document.getElementById('screen-bomb').classList.contains('active')) {
+    showScreen('bomb');
+  }
+  const cuts = data.cuts || [];
+  document.getElementById('progress-info').textContent = `${cuts.length} / ${WIRES.length} 切断済み`;
+
+  const panel = document.getElementById('wire-panel');
+  panel.innerHTML = '';
+  data.wireOrder.forEach((wireId, i) => {
+    const wire  = WIRES.find(w => w.id === wireId);
+    const isCut = cuts.includes(wireId);
+    const div   = document.createElement('div');
+    div.className = 'wire-item' + (isCut ? ' cut' : '');
+    div.style.setProperty('--wc',      wire.color);
+    div.style.setProperty('--wc-glow', wire.glow);
+    div.innerHTML = `
+      <span class="wire-num">${i + 1}</span>
+      <div class="wire-cable-wrap">
+        <div class="wire-cable"></div>
+      </div>
+      <span class="wire-scissors">✂</span>
+    `;
+    if (!isCut) div.onclick = () => cutWire(wireId, data);
+    panel.appendChild(div);
+  });
+}
+
+async function cutWire(wireId, data) {
+  const cuts = [...(data.cuts || []), wireId];
+  const step  = cuts.length - 1;
+
+  if (data.sequence[step] !== wireId) {
+    await roomRef.update({ state: 'failed' });
+    return;
+  }
+  if (cuts.length === data.sequence.length) {
+    await roomRef.update({ cuts, state: 'success' });
+  } else {
+    await roomRef.update({ cuts });
+  }
+}
+
+// ===== RENDER MANUAL =====
+function renderManual(data) {
+  if (!document.getElementById('screen-manual').classList.contains('active')) {
+    showScreen('manual');
+  }
+  const cuts = data.cuts || [];
+  const seq  = document.getElementById('sequence-display');
+  seq.innerHTML = data.sequence.map((wireId, i) => {
+    const wire    = WIRES.find(w => w.id === wireId);
+    const done    = i < cuts.length;
+    const current = i === cuts.length;
+    return `
+      <div class="seq-item ${done ? 'done' : ''} ${current ? 'current' : ''}">
+        <span class="seq-num">${i + 1}</span>
+        <span class="seq-color-name" style="color:${wire.color}">${wire.name}のワイヤー</span>
+        ${current ? '<span class="seq-arrow">← 今ここ</span>' : ''}
+        ${done    ? '<span class="seq-check">✓</span>' : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+// ===== TIMER =====
+function startTimer(startTime) {
+  if (timerStarted) return;
+  timerStarted = true;
+
+  const tick = () => {
+    const elapsed   = (Date.now() - startTime) / 1000;
+    const remaining = Math.max(0, DURATION - elapsed);
+    const disp      = Math.ceil(remaining).toString().padStart(2, '0');
+
+    ['timer-host', 'timer-guest'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = disp;
+      el.className   = 'timer' + (remaining < 10 ? ' danger' : remaining < 30 ? ' warn' : '');
+    });
+
+    if (remaining <= 0) {
+      if (role === 'host' && !resultShown) roomRef.update({ state: 'failed' });
+      return;
+    }
+    timerHandle = setTimeout(tick, 250);
+  };
+
+  const wait = startTime - Date.now();
+  setTimeout(tick, Math.max(0, wait));
+}
+
+// ===== FLASH & RESULT =====
+function flashRed(cb) {
+  const f = document.getElementById('flash');
+  f.style.display = 'block';
+  f.style.opacity = '0.85';
+  setTimeout(() => {
+    f.style.transition = 'opacity 0.9s';
+    f.style.opacity = '0';
+    setTimeout(() => {
+      f.style.display = 'none';
+      f.style.transition = '';
+      cb();
+    }, 900);
+  }, 80);
+}
+
+function showResult(success) {
+  document.getElementById('result-emoji').textContent   = success ? '🎉' : '💥';
+  document.getElementById('result-heading').textContent = success ? '解除成功！！' : '爆発...';
+  document.getElementById('result-sub').textContent     = success
+    ? 'さすが！2人の連携は完璧だ'
+    : '残念... もう一度挑戦しよう';
+  document.getElementById('result-heading').style.color = success ? '#5aff5a' : '#ff4444';
+  showScreen('result');
+}
+
+function backToTitle() {
+  if (roomRef) { roomRef.off(); roomRef = null; }
+  clearTimeout(timerHandle);
+  timerStarted = false;
+  gameStarted  = false;
+  resultShown  = false;
+  document.getElementById('room-input').value = '';
+  showScreen('title');
+}
+</script>
+</body>
+</html>
