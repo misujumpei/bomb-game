@@ -114,6 +114,45 @@
     .rv-nested-hit .rv-nested-header { color: #7aff7a; }
     .rv-cond-resolved { font-size: 0.72rem; color: #666; margin-left: auto; white-space: nowrap; }
 
+    /* PANIC MODE (残り15秒以下) */
+    @keyframes panicShake {
+      0%, 100% { transform: translateX(0) rotate(0deg); }
+      20%       { transform: translateX(-4px) rotate(-0.4deg); }
+      40%       { transform: translateX(4px)  rotate(0.4deg); }
+      60%       { transform: translateX(-3px) rotate(-0.3deg); }
+      80%       { transform: translateX(3px)  rotate(0.3deg); }
+    }
+    body.panic { animation: panicShake 0.35s infinite; }
+
+    @keyframes timerPanicPulse {
+      0%, 100% { color: #ff4040; text-shadow: 0 0 12px #ff000088; }
+      50%       { color: #ff0000; text-shadow: 0 0 30px #ff0000cc, 0 0 60px #ff000044; transform: scale(1.08); }
+    }
+    body.panic .timer:not(.bonus):not(.penalty) { animation: timerPanicPulse 0.6s ease-in-out infinite; }
+
+    /* BONUS RECOVERY */
+    @keyframes timerBonus {
+      0%   { color: inherit; text-shadow: none;              transform: scale(1); }
+      15%  { color: #40ff80; text-shadow: 0 0 28px #00ff6699; transform: scale(1.22); }
+      45%  { color: #80ffb0; text-shadow: 0 0 18px #00ff6655; transform: scale(1.1); }
+      70%  { color: #40ff80; text-shadow: 0 0 22px #00ff6677; transform: scale(1.13); }
+      100% { color: inherit; text-shadow: none;              transform: scale(1); }
+    }
+    .timer.bonus { animation: timerBonus 0.85s ease-out !important; }
+
+    @keyframes bonusFloatUp {
+      0%   { opacity: 1; transform: translateY(0) scale(1.1); }
+      20%  { opacity: 1; transform: translateY(-10px) scale(1.2); }
+      100% { opacity: 0; transform: translateY(-54px) scale(0.88); }
+    }
+    .bonus-float {
+      position: fixed; pointer-events: none; z-index: 9999;
+      color: #40ff80; font-family: 'Courier New', monospace;
+      font-size: 1.15rem; font-weight: 900; letter-spacing: 2px;
+      text-shadow: 0 0 14px #00ff6688;
+      animation: bonusFloatUp 1.35s ease-out forwards;
+    }
+
     /* PENALTY ANIMATION */
     @keyframes timerPenalty {
       0%   { color: inherit; text-shadow: none; transform: scale(1); }
@@ -905,7 +944,8 @@ let roomId, role, roomRef, myName;
 let timerHandle, roundEndHandle, finalArmTimeoutHandle;
 let blackoutHandle = null, blackoutEndHandle = null;
 let timerStarted = false, phaseRendered = null;
-let penaltyMs = 0;
+let penaltyMs = 0, bonusMs = 0;
+let isPanicMode = false;
 let lastDataStr = '';
 let selectedDifficulty = 'hard';
 let storedHostName = 'ホスト', storedGuestName = 'ゲスト';
@@ -1337,6 +1377,7 @@ async function startRound(round, results, cleared, failed, diff) {
     finalArm:  null,
     blackout:   { active: false, light: false },
     penaltyMs:  0,
+    bonusMs:    0,
     p3GroupIdx: p3.p3GroupIdx,
     p3Symbols:  p3.p3Symbols,
     p3Correct:  p3.p3Correct,
@@ -1382,9 +1423,10 @@ function handleStateChange(data) {
     updateBlackoutOverlay(data.blackout);
   }
 
-  // タイムペナルティ：タイマーに即時反映（キー重複チェックより前）
-  if (data.state === 'phase1') {
+  // ペナルティ／ボーナス：タイマーに即時反映（キー重複チェックより前）
+  if (['phase1', 'phase2', 'phase3'].includes(data.state)) {
     penaltyMs = data.penaltyMs || 0;
+    bonusMs   = data.bonusMs   || 0;
   }
 
   // Play again handler (match-end screen)
@@ -1449,6 +1491,7 @@ function enterPhase1(data) {
   timerStarted = false;
   phaseRendered = null;
   penaltyMs = data.penaltyMs || 0;
+  bonusMs   = data.bonusMs   || 0;
 
   const countdownDone = () => {
     phaseRendered = 'p1';
@@ -1517,7 +1560,7 @@ async function enterDigit(digit, data) {
   }
   // All digits entered — validate
   if (entry === data.mathAnswer) {
-    await roomRef.update({ pinEntry: entry, state: 'phase2' });
+    await roomRef.update({ pinEntry: entry, state: 'phase2', ...bonusUpdate(data) });
   } else {
     // Wrong answer — apply -5s time penalty
     document.querySelectorAll('.pin-digit').forEach(el => el.classList.add('wrong'));
@@ -1680,16 +1723,17 @@ async function cutWire(idx, data) {
     }), 300);
     return;
   }
+  const bonus = bonusUpdate(data);
   if (cuts.length === data.wireSequence.length) {
     const ds = DIFFICULTY_SETTINGS[data.difficulty || 'hard'];
     if (ds.hasPhase3) {
       const p3StartTime = Date.now() + 4000;
-      await roomRef.update({ wireCuts: cuts, state: 'phase3', p3StartTime, p3Duration: ds.p3Duration });
+      await roomRef.update({ wireCuts: cuts, state: 'phase3', p3StartTime, p3Duration: ds.p3Duration, ...bonus });
     } else {
-      await roomRef.update({ wireCuts: cuts, state: 'final-arm', finalArm: { hostTs: null, guestTs: null } });
+      await roomRef.update({ wireCuts: cuts, state: 'final-arm', finalArm: { hostTs: null, guestTs: null }, ...bonus });
     }
   } else {
-    await roomRef.update({ wireCuts: cuts });
+    await roomRef.update({ wireCuts: cuts, ...bonus });
   }
 }
 
@@ -1958,10 +2002,11 @@ async function pressSymbol(symIdx, data) {
   }
   const newPressed = [...pressed, symIdx];
   playCut();
+  const bonus = bonusUpdate(data);
   if (newPressed.length === data.p3Correct.length) {
-    await roomRef.update({ p3Pressed: newPressed, state: 'final-arm', finalArm: { hostTs: null, guestTs: null } });
+    await roomRef.update({ p3Pressed: newPressed, state: 'final-arm', finalArm: { hostTs: null, guestTs: null }, ...bonus });
   } else {
-    await roomRef.update({ p3Pressed: newPressed });
+    await roomRef.update({ p3Pressed: newPressed, ...bonus });
   }
 }
 
@@ -1974,6 +2019,7 @@ function enterFinalArm(data) {
   clearTimeout(blackoutEndHandle);
   if (role === 'host') roomRef.child('blackout').update({ active: false, light: false });
   stopBGM();
+  exitPanicMode();
   timerStarted = false;
   showScreen('final-arm');
 
@@ -2065,6 +2111,83 @@ async function pressFinalArmBtn() {
   });
 }
 
+// ===== PANIC MODE =====
+function enterPanicMode() {
+  isPanicMode = true;
+  document.body.classList.add('panic');
+}
+function exitPanicMode() {
+  if (!isPanicMode) return;
+  isPanicMode = false;
+  document.body.classList.remove('panic');
+}
+
+// ===== BONUS TIME (残り15秒以下で正解した際の+5秒回復) =====
+function currentRemaining(data) {
+  return data.duration - (Date.now() - data.startTime) / 1000
+    - (data.penaltyMs || 0) / 1000
+    + (data.bonusMs   || 0) / 1000;
+}
+
+function bonusUpdate(data) {
+  if (currentRemaining(data) > 15) return {};
+  flashTimerBonus();
+  playBonus();
+  return { bonusMs: (data.bonusMs || 0) + 5000 };
+}
+
+function playBonus() {
+  try {
+    const ctx = getAudio();
+    // ピコーン！的な2音上昇
+    [[880, 0], [1320, 0.12]].forEach(([freq, delay]) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+      gain.gain.linearRampToValueAtTime(0.28, ctx.currentTime + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.38);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.4);
+    });
+  } catch(e) {}
+}
+
+function showBonusFloat(refEl) {
+  if (!refEl) return;
+  const rect = refEl.getBoundingClientRect();
+  const floatEl = document.createElement('div');
+  floatEl.className = 'bonus-float';
+  floatEl.textContent = '+5 SEC!';
+  floatEl.style.left = (rect.left + rect.width / 2 - 38) + 'px';
+  floatEl.style.top  = (rect.top - 4) + 'px';
+  document.body.appendChild(floatEl);
+  setTimeout(() => floatEl.remove(), 1450);
+}
+
+function flashTimerBonus() {
+  const visibleId = gameRole === 'bomber' ? 'timer-bp1' : 'timer-mp1';
+  // phase2/phase3 にいる場合は対応するタイマーへ
+  const activeIds = ['timer-bp1','timer-bp2','timer-bp3','timer-mp1','timer-mp2','timer-mp3'].filter(
+    id => document.getElementById(id) !== null
+  );
+  activeIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('bonus');
+    void el.offsetHeight;
+    el.classList.add('bonus');
+    el.addEventListener('animationend', () => el.classList.remove('bonus'), { once: true });
+  });
+  // フロートは現在表示中のタイマーだけに出す
+  const phases = ['bp1','bp2','bp3','mp1','mp2','mp3'];
+  for (const suf of phases) {
+    const el = document.getElementById('timer-' + suf);
+    if (el && el.offsetParent !== null) { showBonusFloat(el); break; }
+  }
+}
+
 // ===== PENALTY EFFECTS =====
 function showPenaltyFloat(refEl) {
   if (!refEl) return;
@@ -2099,17 +2222,25 @@ function startTimer(startTime, duration) {
   timerStarted = true;
   const ids = ['timer-bp1', 'timer-bp2', 'timer-bp3', 'timer-mp1', 'timer-mp2', 'timer-mp3'];
   const tick = () => {
-    const remaining = Math.max(0, duration - (Date.now() - startTime) / 1000 - penaltyMs / 1000);
+    const remaining = Math.max(0, duration - (Date.now() - startTime) / 1000 - penaltyMs / 1000 + bonusMs / 1000);
     const disp = Math.ceil(remaining).toString().padStart(2, '0');
     ids.forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.textContent = disp;
-      if (!el.classList.contains('penalty')) {
+      if (!el.classList.contains('penalty') && !el.classList.contains('bonus')) {
         el.className = 'timer' + (remaining < 10 ? ' danger' : remaining < 20 ? ' warn' : '');
       }
     });
-    if (remaining < 20 && bgmSpeed > 280) { bgmSpeed = Math.max(280, bgmSpeed - 5); }
+    // BGM加速：通常域→パニック域
+    if (remaining < 20) {
+      const minSpd = remaining < 15 ? 180 : 280;
+      const decr   = remaining < 15 ? 8   : 5;
+      if (bgmSpeed > minSpd) bgmSpeed = Math.max(minSpd, bgmSpeed - decr);
+    }
+    // パニックモード切り替え
+    if (remaining > 0 && remaining <= 15 && !isPanicMode) enterPanicMode();
+    else if ((remaining > 15 || remaining <= 0) && isPanicMode) exitPanicMode();
     if (remaining <= 0) {
       if (role === 'host') roomRef.update({
         state: 'review', failedWireIdx: -1, failReason: 'timeout',
@@ -2129,6 +2260,7 @@ function enterReview(data) {
   clearTimeout(blackoutHandle);
   clearTimeout(blackoutEndHandle);
   stopBGM();
+  exitPanicMode();
   timerStarted = false;
   phaseRendered = null;
   if (data.failReason === 'timeout') { playExplosion(); flashRed(); }
