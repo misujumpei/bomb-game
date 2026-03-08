@@ -551,9 +551,9 @@ const WIRES = [
   { id:'white',  name:'白',  color:'#c8c8c8', glow:'#c8c8c844' },
 ];
 const DIFFICULTY_SETTINGS = {
-  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], mathLevel: 'easy',   label: 'かんたん', badgeClass: 'diff-badge-easy' },
-  normal: { durations: [100,  80, 60], wireCounts: [4, 5, 5], mathLevel: 'normal', label: 'ふつう',   badgeClass: 'diff-badge-normal' },
-  hard:   { durations: [ 80,  60, 45], wireCounts: [5, 6, 7], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard' },
+  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], decoyCounts: [0, 0, 1], mathLevel: 'easy',   label: 'かんたん', badgeClass: 'diff-badge-easy' },
+  normal: { durations: [100,  80, 60], wireCounts: [4, 4, 5], decoyCounts: [0, 1, 1], mathLevel: 'normal', label: 'ふつう',   badgeClass: 'diff-badge-normal' },
+  hard:   { durations: [ 80,  60, 45], wireCounts: [4, 4, 5], decoyCounts: [1, 2, 2], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard' },
 };
 const TOTAL_ROUNDS = 3;
 
@@ -655,9 +655,9 @@ function setDifficulty(diff) {
     btn.className = 'diff-btn' + (d === diff ? ' active-' + d : '');
   });
   const infos = {
-    easy:   '制限時間 120/100/80秒　ワイヤー 3/4/4本　たし算・ひき算',
-    normal: '制限時間 100/80/60秒　ワイヤー 4/5/5本　かけ算まで',
-    hard:   '制限時間 80/60/45秒　ワイヤー 5/6/7本　複雑な計算',
+    easy:   '制限時間 120/100/80秒　切断 3/4/4本＋罠 0/0/1本　たし算・ひき算',
+    normal: '制限時間 100/80/60秒　切断 4/4/5本＋罠 0/1/1本　かけ算まで',
+    hard:   '制限時間 80/60/45秒　切断 4/4/5本＋罠 1/2/2本　複雑な計算',
   };
   document.getElementById('diff-info-text').textContent = infos[diff];
 }
@@ -724,49 +724,58 @@ function generateStroopWires(count) {
   return { wireVisuals: visuals, wireTexts: texts };
 }
 
-function generateConditionalRule(wireVisuals, wireTexts) {
-  const count = wireVisuals.length;
-  const sequence = shuffle(Array.from({length: count}, (_, i) => i));
+function generateConditionalRule(wireVisuals, wireTexts, decoyCount) {
+  const totalCount = wireVisuals.length;
+
+  // 罠ワイヤーのインデックスをランダムに割り当て
+  const allIndices = shuffle(Array.from({length: totalCount}, (_, i) => i));
+  const wireDecoys = allIndices.slice(0, decoyCount);
+  const cutIndices = allIndices.slice(decoyCount);
+
+  // 罠ワイヤーの説明文（マニュアル用）
+  const wireDecoyDescs = wireDecoys.map(idx => {
+    const criterion = Math.random() < 0.5 ? 'text' : 'visual';
+    return { criterion, targetId: criterion === 'text' ? wireTexts[idx] : wireVisuals[idx] };
+  });
+
+  // 切断順序をシャッフル（切るワイヤーのみ）
+  const sequence = shuffle([...cutIndices]);
 
   const steps = sequence.map((correctIdx) => {
     // 条件が TRUE か FALSE に解決するかを決める（~50/50）
     const condTrue = Math.random() < 0.5;
 
-    // 条件の種類をランダムに選ぶ
+    // 条件の種類をランダムに選ぶ（totalCount基準）
     const condType = Math.floor(Math.random() * 3);
     let condition;
     if (condType === 0) {
-      // ワイヤーが N本以上
       const N = condTrue
-        ? Math.max(1, count - Math.floor(Math.random() * 2))   // N <= count → TRUE
-        : count + 1 + Math.floor(Math.random() * 2);            // N > count  → FALSE
+        ? Math.max(1, totalCount - Math.floor(Math.random() * 2))
+        : totalCount + 1 + Math.floor(Math.random() * 2);
       condition = { type: 'gte', value: N };
     } else if (condType === 1) {
-      // ワイヤーが N本以下
       const N = condTrue
-        ? count + Math.floor(Math.random() * 2)                 // N >= count → TRUE
-        : Math.max(1, count - 1 - Math.floor(Math.random() * 1)); // N < count → FALSE
+        ? totalCount + Math.floor(Math.random() * 2)
+        : Math.max(1, totalCount - 1 - Math.floor(Math.random() * 1));
       condition = { type: 'lte', value: N };
     } else {
-      // 本数の偶奇
-      const actualParity = count % 2 === 1 ? 'odd' : 'even';
+      const actualParity = totalCount % 2 === 1 ? 'odd' : 'even';
       condition = { type: 'parity', value: condTrue ? actualParity : (actualParity === 'odd' ? 'even' : 'odd') };
     }
 
-    // 正しい枝：correctIdx のワイヤーを指す
+    // 正しい枝：切断対象ワイヤーを指す
     const correctCrit = Math.random() < 0.5 ? 'text' : 'visual';
     const correctTargetId = correctCrit === 'text' ? wireTexts[correctIdx] : wireVisuals[correctIdx];
     const correctBranch = { criterion: correctCrit, targetId: correctTargetId };
 
-    // 誤った枝：別のワイヤーを指す
-    const wrongIndices = Array.from({length: count}, (_, i) => i).filter(i => i !== correctIdx);
+    // 誤った枝：他のワイヤー（罠含む）を指す → 罠が紛れることで難易度アップ
+    const wrongIndices = Array.from({length: totalCount}, (_, i) => i).filter(i => i !== correctIdx);
     let wrongBranch;
     if (wrongIndices.length > 0) {
       const wrongIdx = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
       const wrongCrit = Math.random() < 0.5 ? 'text' : 'visual';
       wrongBranch = { criterion: wrongCrit, targetId: wrongCrit === 'text' ? wireTexts[wrongIdx] : wireVisuals[wrongIdx] };
     } else {
-      // ワイヤーが1本のみ（退化ケース）: 別の基準で同じワイヤーを指す
       const wrongCrit = correctCrit === 'text' ? 'visual' : 'text';
       wrongBranch = { criterion: wrongCrit, targetId: wrongCrit === 'text' ? wireTexts[correctIdx] : wireVisuals[correctIdx] };
     }
@@ -779,7 +788,7 @@ function generateConditionalRule(wireVisuals, wireTexts) {
     };
   });
 
-  return { sequence, steps };
+  return { sequence, steps, wireDecoys, wireDecoyDescs };
 }
 
 // ===== HOST =====
@@ -812,10 +821,12 @@ async function startMatch() {
 
 async function startRound(round, results, cleared, failed, diff) {
   const d = DIFFICULTY_SETTINGS[diff || 'hard'];
-  const wireCount = d.wireCounts[round - 1];
-  const duration  = d.durations[round - 1];
-  const stroop    = generateStroopWires(wireCount);
-  const stroopRule = generateConditionalRule(stroop.wireVisuals, stroop.wireTexts);
+  const cutCount   = d.wireCounts[round - 1];
+  const decoyCount = d.decoyCounts[round - 1];
+  const totalCount = cutCount + decoyCount;
+  const duration   = d.durations[round - 1];
+  const stroop     = generateStroopWires(totalCount);
+  const stroopRule = generateConditionalRule(stroop.wireVisuals, stroop.wireTexts, decoyCount);
   const math = generateMathProblem(d.mathLevel);
   const startTime = Date.now() + 5000;
 
@@ -831,11 +842,13 @@ async function startRound(round, results, cleared, failed, diff) {
     mathExpr: math.expr,
     mathAnswer: math.answer,
     pinEntry: '',
-    wireVisuals:  stroop.wireVisuals,
-    wireTexts:    stroop.wireTexts,
-    wireSequence: stroopRule.sequence,
-    wireSteps:    stroopRule.steps,
-    wireCuts:     [],
+    wireVisuals:    stroop.wireVisuals,
+    wireTexts:      stroop.wireTexts,
+    wireSequence:   stroopRule.sequence,
+    wireSteps:      stroopRule.steps,
+    wireDecoys:     stroopRule.wireDecoys,
+    wireDecoyDescs: stroopRule.wireDecoyDescs,
+    wireCuts:       [],
     playAgain: { host: false, guest: false }
   });
 }
@@ -1028,7 +1041,7 @@ function renderWirePanel(data) {
     document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
   });
   renderRoundBar('round-bar-bp2', data.round, data.results, data.difficulty);
-  document.getElementById('wire-progress').textContent = `${cuts.length} / ${data.wireVisuals.length} 切断済み`;
+  document.getElementById('wire-progress').textContent = `${cuts.length} / ${data.wireSequence.length} 切断済み`;
 
   const panel = document.getElementById('wire-panel');
   panel.innerHTML = '';
@@ -1055,6 +1068,14 @@ function renderWirePanel(data) {
 }
 
 async function cutWire(idx, data) {
+  // 罠ワイヤーを切ったら即失敗
+  if ((data.wireDecoys || []).includes(idx)) {
+    playCut();
+    playError();
+    setTimeout(() => roomRef.update({ state: 'round-end', roundResult: 'failed' }), 300);
+    return;
+  }
+
   const cuts = [...(data.wireCuts || []), idx];
   const step  = cuts.length - 1;
   const correctIdx = data.wireSequence[step];
@@ -1082,6 +1103,8 @@ function renderWireManual(data) {
 
   const steps = data.wireSteps || [];
   const totalWires = data.wireVisuals.length;
+  const decoys     = data.wireDecoys     || [];
+  const decoyDescs = data.wireDecoyDescs || [];
 
   // 条件テキスト生成
   function condLabel(cond) {
@@ -1159,6 +1182,18 @@ function renderWireManual(data) {
     </div>`;
   }).join('');
 
+  // 罠ワイヤー警告セクション
+  const decoySection = decoyDescs.length > 0 ? `
+    <div class="step-block" style="border-color:#7a1a1a;box-shadow:0 0 12px #ff000018;margin-bottom:10px">
+      <div class="step-header">
+        <div class="step-num" style="background:#5a1010;color:#ff9090">🚫</div>
+        <div class="step-label" style="color:#ff7070">切ってはいけないワイヤー（${decoyDescs.length}本）</div>
+      </div>
+      <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+        ${decoyDescs.map(d => `<div style="font-size:0.88rem;padding:4px 2px">${branchDesc(d)}</div>`).join('')}
+      </div>
+    </div>` : '';
+
   document.getElementById('rule-display').innerHTML = `
     <div class="step-block" style="margin-bottom:10px">
       <div class="step-header">
@@ -1169,6 +1204,7 @@ function renderWireManual(data) {
         「ラベル」= ワイヤーに書かれた文字の色　「見た目」= ワイヤー自体の色
       </div>
     </div>
+    ${decoySection}
     ${currentBox}
     <div class="step-block">
       <div class="step-header">
