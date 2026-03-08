@@ -288,6 +288,44 @@
       background: #2a2000; border-color: #f0c020;
       color: #ffe060; box-shadow: 0 0 18px #f0c02055, 0 0 40px #f0c02022;
     }
+
+    /* PHASE 3: SYMBOL GRID (bomber) */
+    .sym-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    .sym-btn {
+      aspect-ratio: 1; border-radius: 12px; border: 2px solid #2c2c3e;
+      background: #14141e; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; padding: 18px;
+      transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+      touch-action: manipulation;
+    }
+    .sym-btn:active:not(:disabled) { transform: scale(0.94); }
+    .sym-btn:disabled { cursor: default; }
+    .sym-btn svg { width: 100%; height: 100%; overflow: visible; }
+    .sym-btn svg path {
+      stroke: #5a7088; stroke-width: 3.5; fill: none;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .sym-btn.done { background: #0c1e0c; border-color: #2a6a2a; box-shadow: 0 0 16px #00ff0022; }
+    .sym-btn.done svg path { stroke: #5aff5a; }
+
+    /* PHASE 3: MANUAL SYMBOL LIST */
+    .sym-group-block { margin-bottom: 10px; border: 1px solid #26263a; border-radius: 8px; overflow: hidden; }
+    .sym-group-header {
+      background: #18182a; padding: 6px 12px; font-size: 0.68rem;
+      letter-spacing: 3px; color: #5a5a7a;
+    }
+    .sym-group-list { display: flex; flex-direction: column; }
+    .sym-list-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 7px 12px; border-top: 1px solid #1c1c2c;
+    }
+    .sym-list-num { font-size: 0.72rem; color: #3a3a5a; width: 18px; flex-shrink: 0; text-align: right; }
+    .sym-thumb { width: 40px; height: 40px; flex-shrink: 0; }
+    .sym-thumb svg { width: 100%; height: 100%; overflow: visible; }
+    .sym-thumb svg path {
+      stroke: #7a8a9a; stroke-width: 3; fill: none;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
     .bomb-header {
       display: flex; justify-content: space-between; align-items: center;
       margin-bottom: 14px; border-bottom: 1px solid #222; padding-bottom: 12px;
@@ -674,6 +712,43 @@
   </div>
 </div>
 
+<!-- PHASE 3: SYMBOL (BOMBER) -->
+<div id="screen-bomb-p3" class="screen">
+  <div class="bomb-panel" style="position:relative;overflow:hidden">
+    <div class="panel-header">
+      <span class="panel-label">💣 BOMBER</span>
+      <span class="timer" id="timer-bp3">--</span>
+      <div id="round-bar-bp3"></div>
+    </div>
+    <div class="section-title" style="margin-bottom:10px">⚠ PHASE 3 — SYMBOL MODULE</div>
+    <p style="font-size:0.75rem;color:#5a7088;margin-bottom:14px;line-height:1.5">
+      マニュアルの指示する順番にシンボルを押せ！
+    </p>
+    <div class="sym-grid" id="sym-grid"></div>
+    <div class="progress-hint" id="sym-progress" style="text-align:center;font-size:0.78rem;color:#5a5a7a;margin-top:4px"></div>
+  </div>
+</div>
+
+<!-- PHASE 3: SYMBOL (MANUAL) -->
+<div id="screen-manual-p3" class="screen">
+  <div class="manual-panel">
+    <div class="panel-header">
+      <span class="panel-label">📖 MANUAL</span>
+      <span class="timer" id="timer-mp3">--</span>
+      <div id="round-bar-mp3"></div>
+    </div>
+    <div class="section-title" style="margin-bottom:10px">⚠ PHASE 3 — SYMBOL MODULE</div>
+    <p style="font-size:0.75rem;color:#5a7088;margin-bottom:12px;line-height:1.5">
+      下のグループリストを確認し、爆弾側に押す順番を指示せよ。
+    </p>
+    <div id="sym-manual-groups"></div>
+    <div class="sym-group-block" style="margin-top:12px">
+      <div class="sym-group-header">— 正解の押す順番 —</div>
+      <div id="sym-correct-seq" style="display:flex;gap:10px;padding:10px 12px;align-items:center;flex-wrap:wrap"></div>
+    </div>
+  </div>
+</div>
+
 <!-- FINAL ARM -->
 <div id="screen-final-arm" class="screen">
   <div class="fa-wrap">
@@ -774,11 +849,31 @@ const WIRES = [
   { id:'white',  name:'白',  color:'#c8c8c8', glow:'#c8c8c844' },
 ];
 const DIFFICULTY_SETTINGS = {
-  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], decoyCounts: [0, 0, 1], mathLevel: 'easy',   label: 'かんたん', badgeClass: 'diff-badge-easy' },
-  normal: { durations: [100,  80, 60], wireCounts: [4, 4, 5], decoyCounts: [0, 1, 1], mathLevel: 'normal', label: 'ふつう',   badgeClass: 'diff-badge-normal' },
-  hard:   { durations: [135, 105, 80], wireCounts: [4, 4, 5], decoyCounts: [1, 2, 2], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard' },
+  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], decoyCounts: [0, 0, 1], mathLevel: 'easy',   label: 'かんたん',   badgeClass: 'diff-badge-easy',   hasPhase3: false, p3Duration: 0  },
+  normal: { durations: [100,  80, 60], wireCounts: [4, 4, 5], decoyCounts: [0, 1, 1], mathLevel: 'normal', label: 'ふつう',     badgeClass: 'diff-badge-normal', hasPhase3: true,  p3Duration: 60 },
+  hard:   { durations: [135, 105, 80], wireCounts: [4, 4, 5], decoyCounts: [1, 2, 2], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard',   hasPhase3: true,  p3Duration: 45 },
 };
 const TOTAL_ROUNDS = 3;
+
+// ===== PHASE 3 SYMBOLS =====
+const SYMBOLS = [
+  { id: 's0',  d: 'M12 12 L48 48 M48 12 L12 48 M30 4 L30 56' },
+  { id: 's1',  d: 'M8 18 Q18 8 30 18 Q42 28 52 18 M8 42 Q18 32 30 42 Q42 52 52 42' },
+  { id: 's2',  d: 'M42 22 A13 13 0 1 0 29 35 L14 54' },
+  { id: 's3',  d: 'M30 6 L36 23 L54 23 L40 33 L46 50 L30 40 L14 50 L20 33 L6 23 L24 23 Z M46 50 L54 57' },
+  { id: 's4',  d: 'M38 8 L38 52 M38 8 Q14 8 14 24 Q14 40 38 40' },
+  { id: 's5',  d: 'M8 10 Q30 30 8 50 L52 10 Q30 30 52 50 Z' },
+  { id: 's6',  d: 'M30 4 L30 56 M30 17 A13 13 0 0 1 30 43 A13 13 0 0 1 30 17' },
+  { id: 's7',  d: 'M46 14 A20 20 0 1 0 20 44 L20 56 L8 56' },
+  { id: 's8',  d: 'M8 14 L18 46 L30 22 L42 46 L52 14 M30 56 A3 3 0 1 0 30.01 56' },
+  { id: 's9',  d: 'M8 30 Q8 12 20 12 Q34 12 30 30 Q26 48 40 48 Q52 48 52 30' },
+  { id: 's10', d: 'M12 14 L18 14 Q10 34 10 44 Q10 56 30 56 Q50 56 50 44 Q50 34 42 14 L48 14' },
+  { id: 's11', d: 'M8 52 L30 8 L52 52 Z M35 38 A10 10 0 1 0 35.01 38' },
+];
+const SYMBOL_GROUPS = [
+  { label: 'グループ A', order: [0, 2, 4, 6, 8, 10] },
+  { label: 'グループ B', order: [1, 3, 5, 7, 9, 11] },
+];
 
 // ===== STATE =====
 let roomId, role, roomRef, myName;
@@ -1189,6 +1284,7 @@ async function startRound(round, results, cleared, failed, diff) {
   const stroopRule = generateConditionalRule(stroop.wireVisuals, stroop.wireTexts, decoyCount, diff);
   const math = generateMathProblem(d.mathLevel);
   const startTime = Date.now() + 5000;
+  const p3 = generatePhase3();
 
   await roomRef.update({
     state: 'phase1',
@@ -1214,6 +1310,10 @@ async function startRound(round, results, cleared, failed, diff) {
     playAgain: { host: false, guest: false },
     finalArm:  null,
     blackout:  { active: false, light: false },
+    p3GroupIdx: p3.p3GroupIdx,
+    p3Symbols:  p3.p3Symbols,
+    p3Correct:  p3.p3Correct,
+    p3Pressed:  [],
   });
 }
 
@@ -1278,13 +1378,15 @@ function handleStateChange(data) {
 
   const fa    = data.finalArm || {};
   const faFp  = (fa.hostTs ? 'H' : '') + (fa.guestTs ? 'G' : '');
-  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',') + '_' + faFp;
+  const p3Fp  = (data.p3Pressed || []).join('-');
+  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',') + '_' + faFp + '_' + p3Fp;
   if (key === lastDataStr) return;
   lastDataStr = key;
 
   switch (data.state) {
     case 'phase1':     enterPhase1(data);    break;
     case 'phase2':     enterPhase2(data);    break;
+    case 'phase3':     enterPhase3(data);    break;
     case 'final-arm':  enterFinalArm(data);  break;
     case 'review':     enterReview(data);    break;
     case 'round-end':  enterRoundEnd(data);  break;
@@ -1534,7 +1636,13 @@ async function cutWire(idx, data) {
     return;
   }
   if (cuts.length === data.wireSequence.length) {
-    await roomRef.update({ wireCuts: cuts, state: 'final-arm', finalArm: { hostTs: null, guestTs: null } });
+    const ds = DIFFICULTY_SETTINGS[data.difficulty || 'hard'];
+    if (ds.hasPhase3) {
+      const p3StartTime = Date.now() + 4000;
+      await roomRef.update({ wireCuts: cuts, state: 'phase3', p3StartTime, p3Duration: ds.p3Duration });
+    } else {
+      await roomRef.update({ wireCuts: cuts, state: 'final-arm', finalArm: { hostTs: null, guestTs: null } });
+    }
   } else {
     await roomRef.update({ wireCuts: cuts });
   }
@@ -1703,6 +1811,115 @@ function renderWireManual(data) {
   document.getElementById('sequence-display').innerHTML = '';
 }
 
+// ===== PHASE 3: SYMBOL MODULE =====
+function generatePhase3() {
+  const groupIdx = Math.floor(Math.random() * SYMBOL_GROUPS.length);
+  const group = SYMBOL_GROUPS[groupIdx];
+  const picked = shuffle([...group.order]).slice(0, 4);
+  const correctSeq = [...picked].sort((a, b) => group.order.indexOf(a) - group.order.indexOf(b));
+  return { p3GroupIdx: groupIdx, p3Symbols: shuffle([...picked]), p3Correct: correctSeq, p3Pressed: [] };
+}
+
+function symSVG(symIdx, extraClass) {
+  const s = SYMBOLS[symIdx];
+  return `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" class="${extraClass||''}"><path d="${s.d}"/></svg>`;
+}
+
+function enterPhase3(data) {
+  const isFirstEnter = phaseRendered !== 'p3';
+  phaseRendered = 'p3';
+  if (isFirstEnter) {
+    clearTimeout(timerHandle); clearTimeout(blackoutHandle); clearTimeout(blackoutEndHandle);
+    stopBGM(); timerStarted = false;
+    if (role === 'host') roomRef.child('blackout').update({ active: false, light: false });
+    const launch = () => {
+      if (gameRole === 'bomber') { showScreen('bomb-p3'); renderSymbolPanel(data); }
+      else { showScreen('manual-p3'); renderSymbolManual(data); }
+      startTimer(data.p3StartTime, data.p3Duration);
+      startBGM(550);
+    };
+    if (document.getElementById('countdown-overlay').classList.contains('show')) launch();
+    else runCountdown(data.p3StartTime, `ROUND ${data.round} — PHASE 3 / 3`, launch);
+  } else {
+    if (gameRole === 'bomber') renderSymbolPanel(data);
+    else renderSymbolManual(data);
+  }
+}
+
+function renderSymbolPanel(data) {
+  const pressed = data.p3Pressed || [];
+  const symbols = data.p3Symbols || [];
+  const correct = data.p3Correct || [];
+  renderRoundBar('round-bar-bp3', data.round, data.results, data.difficulty);
+
+  const grid = document.getElementById('sym-grid');
+  grid.innerHTML = symbols.map((symIdx, i) => {
+    const isDone = pressed.includes(symIdx);
+    const pos = pressed.indexOf(symIdx);
+    const label = isDone ? `✓ ${pos + 1}` : '';
+    return `<button class="sym-btn${isDone ? ' done' : ''}" onclick="pressSymbol(${symIdx}, window._p3data)" ${isDone ? 'disabled' : ''}>
+      ${symSVG(symIdx)}
+    </button>`;
+  }).join('');
+
+  const prog = document.getElementById('sym-progress');
+  prog.textContent = `${pressed.length} / ${correct.length} 押した`;
+
+  // data をグローバルに一時保持（onclick用）
+  window._p3data = data;
+}
+
+function renderSymbolManual(data) {
+  const group = SYMBOL_GROUPS[data.p3GroupIdx];
+  const correct = data.p3Correct || [];
+  renderRoundBar('round-bar-mp3', data.round, data.results, data.difficulty);
+
+  const container = document.getElementById('sym-manual-groups');
+  container.innerHTML = SYMBOL_GROUPS.map((g, gi) => {
+    const items = g.order.map((symIdx, pos) =>
+      `<div class="sym-list-item">
+        <span class="sym-list-num">${pos + 1}.</span>
+        <div class="sym-thumb">${symSVG(symIdx)}</div>
+      </div>`
+    ).join('');
+    return `<div class="sym-group-block">
+      <div class="sym-group-header">${g.label}</div>
+      <div class="sym-group-list">${items}</div>
+    </div>`;
+  }).join('');
+
+  // 正解順表示（マニュアル側にのみ見せる）
+  const seqEl = document.getElementById('sym-correct-seq');
+  seqEl.innerHTML = correct.map((symIdx, i) =>
+    `<div style="text-align:center">
+      <div class="sym-thumb">${symSVG(symIdx)}</div>
+      <div style="font-size:0.65rem;color:#3a3a5a;margin-top:3px">${i + 1}番目</div>
+    </div>`
+  ).join('');
+}
+
+async function pressSymbol(symIdx, data) {
+  if (!data) return;
+  const pressed = data.p3Pressed || [];
+  if (pressed.includes(symIdx)) return;
+  const expected = data.p3Correct[pressed.length];
+  if (symIdx !== expected) {
+    playError();
+    setTimeout(() => roomRef.update({
+      state: 'review', failedWireIdx: -1, failReason: 'wrong_symbol',
+      reviewReady: { host: false, guest: false }
+    }), 300);
+    return;
+  }
+  const newPressed = [...pressed, symIdx];
+  playCut();
+  if (newPressed.length === data.p3Correct.length) {
+    await roomRef.update({ p3Pressed: newPressed, state: 'final-arm', finalArm: { hostTs: null, guestTs: null } });
+  } else {
+    await roomRef.update({ p3Pressed: newPressed });
+  }
+}
+
 // ===== FINAL ARM =====
 function enterFinalArm(data) {
   // タイマー停止・BGM停止・停電タイマー停止
@@ -1807,7 +2024,7 @@ async function pressFinalArmBtn() {
 function startTimer(startTime, duration) {
   if (timerStarted) return;
   timerStarted = true;
-  const ids = ['timer-bp1', 'timer-bp2', 'timer-mp1', 'timer-mp2'];
+  const ids = ['timer-bp1', 'timer-bp2', 'timer-bp3', 'timer-mp1', 'timer-mp2', 'timer-mp3'];
   const tick = () => {
     const remaining = Math.max(0, duration - (Date.now() - startTime) / 1000);
     const disp = Math.ceil(remaining).toString().padStart(2, '0');
@@ -1854,9 +2071,10 @@ function renderReview(data) {
 
   document.getElementById('rv-round').textContent = data.round;
   const reasonMap = {
-    wrong_cut: `${stepIdx + 1}本目：間違ったワイヤーを切ってしまった`,
-    decoy:     `${stepIdx + 1}本目：切ってはいけないワイヤーを切ってしまった`,
-    timeout:   `時間切れ（${stepIdx + 1}本目の途中）`,
+    wrong_cut:    `${stepIdx + 1}本目：間違ったワイヤーを切ってしまった`,
+    decoy:        `${stepIdx + 1}本目：切ってはいけないワイヤーを切ってしまった`,
+    timeout:      `時間切れ（${stepIdx + 1}本目の途中）`,
+    wrong_symbol: 'フェーズ3：間違った順番でシンボルを押してしまった',
   };
   document.getElementById('rv-reason').textContent = reasonMap[failReason] || '';
 
