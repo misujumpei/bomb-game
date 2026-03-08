@@ -97,6 +97,23 @@
     .cond-branch-yes .cond-yn { background: #163016; color: #6aee6a; border: 1px solid #2a6a2a; }
     .cond-branch-no  .cond-yn { background: #301616; color: #ee6a6a; border: 1px solid #6a2a2a; }
 
+    /* HARD: NESTED CONDITION BLOCK */
+    .cond-nested-row { border-top: 1px solid #1a2a1a; padding: 6px 0 2px; }
+    .cond-nested-row:first-child { border-top: none; }
+    .cond-nested-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+    .cond-kw { font-size: 0.62rem; font-weight: bold; padding: 2px 7px; border-radius: 3px; flex-shrink: 0; letter-spacing: 1px; }
+    .cond-kw-if      { background: #163016; color: #7aff7a; border: 1px solid #2a5a2a; }
+    .cond-kw-elseif  { background: #2a2500; color: #ffd050; border: 1px solid #5a4a00; }
+    .cond-kw-else    { background: #2a1200; color: #ff8833; border: 1px solid #5a2800; }
+    .cond-nested-q   { font-size: 0.8rem; color: #c8b84a; font-weight: bold; }
+
+    /* HARD: NESTED REVIEW ROWS */
+    .rv-cond-nested-row { border-top: 1px solid #1a2a1a; padding: 6px 0 2px; }
+    .rv-cond-nested-row:first-child { border-top: none; }
+    .rv-nested-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 0.8rem; color: #c8b84a; flex-wrap: wrap; }
+    .rv-nested-hit .rv-nested-header { color: #7aff7a; }
+    .rv-cond-resolved { font-size: 0.72rem; color: #666; margin-left: auto; white-space: nowrap; }
+
     /* ROLE SWAP OVERLAY */
     #swap-overlay {
       display: none; position: fixed; inset: 0; z-index: 200;
@@ -901,8 +918,18 @@ function generateStroopWires(count) {
   return { wireVisuals: visuals, wireTexts: texts };
 }
 
-function generateConditionalRule(wireVisuals, wireTexts, decoyCount) {
+// 条件を残り本数で評価する共通ヘルパー
+function evalCond(cond, remaining) {
+  if (!cond) return false;
+  if (cond.type === 'gte')    return remaining >= cond.value;
+  if (cond.type === 'lte')    return remaining <= cond.value;
+  if (cond.type === 'parity') return (remaining % 2 === 1 ? 'odd' : 'even') === cond.value;
+  return false;
+}
+
+function generateConditionalRule(wireVisuals, wireTexts, decoyCount, difficulty) {
   const totalCount = wireVisuals.length;
+  const isHard = difficulty === 'hard';
 
   // 罠ワイヤーのインデックスをランダムに割り当て
   const allIndices = shuffle(Array.from({length: totalCount}, (_, i) => i));
@@ -918,14 +945,83 @@ function generateConditionalRule(wireVisuals, wireTexts, decoyCount) {
   // 切断順序をシャッフル（切るワイヤーのみ）
   const sequence = shuffle([...cutIndices]);
 
+  // 残り本数 rem でTRUEになる条件を生成
+  function makeCondTrue(rem) {
+    const t = Math.floor(Math.random() * 3);
+    if (t === 0) return { type: 'gte', value: Math.max(1, rem - Math.floor(Math.random() * 2)) };
+    if (t === 1) return { type: 'lte', value: rem + Math.floor(Math.random() * 2) };
+    const p = rem % 2 === 1 ? 'odd' : 'even';
+    return { type: 'parity', value: p };
+  }
+  // 残り本数 rem でFALSEになる条件を生成
+  function makeCondFalse(rem) {
+    const t = Math.floor(Math.random() * 3);
+    if (t === 0) return { type: 'gte', value: rem + 1 + Math.floor(Math.random() * 2) };
+    if (t === 1) return { type: 'lte', value: Math.max(1, rem - 1 - Math.floor(Math.random() * 1)) };
+    const p = rem % 2 === 1 ? 'odd' : 'even';
+    return { type: 'parity', value: p === 'odd' ? 'even' : 'odd' };
+  }
+
   const steps = sequence.map((correctIdx, stepIndex) => {
     // このステップ実行時点で残っているワイヤー本数（stepIndex本すでに切断済み）
     const remainingAtStep = totalCount - stepIndex;
 
-    // 条件が TRUE か FALSE に解決するかを決める（~50/50）
-    const condTrue = Math.random() < 0.5;
+    // ====== Hard: 3段階の入れ子 (IF → ELSE IF → ELSE) ======
+    if (isHard) {
+      // 正解スロットをランダムに決定: 0=action1(IF-YES), 1=action2(ELSEIF-YES), 2=fallback(ELSE)
+      const correctSlot = Math.floor(Math.random() * 3);
 
-    // 条件の種類をランダムに選ぶ（残り本数基準）
+      let condition1, condition2;
+      if (correctSlot === 0) {
+        condition1 = makeCondTrue(remainingAtStep);
+        condition2 = makeCondFalse(remainingAtStep); // 到達されないが表示用に生成
+      } else if (correctSlot === 1) {
+        condition1 = makeCondFalse(remainingAtStep);
+        condition2 = makeCondTrue(remainingAtStep);
+      } else {
+        condition1 = makeCondFalse(remainingAtStep);
+        condition2 = makeCondFalse(remainingAtStep);
+      }
+
+      const correctCrit = Math.random() < 0.5 ? 'text' : 'visual';
+      const correctBranch = {
+        criterion: correctCrit,
+        targetId: correctCrit === 'text' ? wireTexts[correctIdx] : wireVisuals[correctIdx],
+      };
+
+      // 誤枝2本を別ワイヤーから生成
+      const wrongPool = shuffle(
+        Array.from({length: totalCount}, (_, i) => i).filter(i => i !== correctIdx)
+      );
+      function makeWrong(wi) {
+        const c = Math.random() < 0.5 ? 'text' : 'visual';
+        return { criterion: c, targetId: c === 'text' ? wireTexts[wi] : wireVisuals[wi] };
+      }
+      const fallbackWrong = {
+        criterion: correctCrit === 'text' ? 'visual' : 'text',
+        targetId:  correctCrit === 'text' ? wireVisuals[correctIdx] : wireTexts[correctIdx],
+      };
+      const wrong1 = wrongPool.length > 0 ? makeWrong(wrongPool[0]) : fallbackWrong;
+      const wrong2 = wrongPool.length > 1 ? makeWrong(wrongPool[1]) : fallbackWrong;
+
+      const actions = [null, null, null];
+      actions[correctSlot] = correctBranch;
+      let wi = 0;
+      for (let s = 0; s < 3; s++) {
+        if (s !== correctSlot) { actions[s] = wi === 0 ? wrong1 : wrong2; wi++; }
+      }
+
+      return {
+        idx: correctIdx,
+        nested: true,
+        condition1, action1: actions[0],
+        condition2, action2: actions[1],
+        actionFallback: actions[2],
+      };
+    }
+
+    // ====== Easy/Normal: 1段階の IF-ELSE ======
+    const condTrue = Math.random() < 0.5;
     const condType = Math.floor(Math.random() * 3);
     let condition;
     if (condType === 0) {
@@ -943,12 +1039,10 @@ function generateConditionalRule(wireVisuals, wireTexts, decoyCount) {
       condition = { type: 'parity', value: condTrue ? actualParity : (actualParity === 'odd' ? 'even' : 'odd') };
     }
 
-    // 正しい枝：切断対象ワイヤーを指す
     const correctCrit = Math.random() < 0.5 ? 'text' : 'visual';
     const correctTargetId = correctCrit === 'text' ? wireTexts[correctIdx] : wireVisuals[correctIdx];
     const correctBranch = { criterion: correctCrit, targetId: correctTargetId };
 
-    // 誤った枝：他のワイヤー（罠含む）を指す → 罠が紛れることで難易度アップ
     const wrongIndices = Array.from({length: totalCount}, (_, i) => i).filter(i => i !== correctIdx);
     let wrongBranch;
     if (wrongIndices.length > 0) {
@@ -1011,7 +1105,7 @@ async function startRound(round, results, cleared, failed, diff) {
   const totalCount = cutCount + decoyCount;
   const duration   = d.durations[round - 1];
   const stroop     = generateStroopWires(totalCount);
-  const stroopRule = generateConditionalRule(stroop.wireVisuals, stroop.wireTexts, decoyCount);
+  const stroopRule = generateConditionalRule(stroop.wireVisuals, stroop.wireTexts, decoyCount, diff);
   const math = generateMathProblem(d.mathLevel);
   const startTime = Date.now() + 5000;
 
@@ -1337,15 +1431,52 @@ function renderWireManual(data) {
   const currentStep = cuts.length < steps.length ? steps[cuts.length] : null;
   let currentBox;
   if (currentStep) {
-    const cond = currentStep.condition;
-    currentBox = `
-      <div class="step-block" style="border-color:#3a7a3a;box-shadow:0 0 14px #00ff0022;margin-bottom:10px">
+    const header = `
         <div class="step-header">
           <div class="step-num" style="background:#1e7a1e;color:#afffaf">▶</div>
           <div class="step-label" style="color:#6aee6a">今ホストに伝えること（${cuts.length + 1}本目）</div>
-        </div>
+        </div>`;
+
+    let condBody;
+    if (currentStep.nested) {
+      // Hard: 3段階 IF → ELSE IF → ELSE
+      condBody = `
         <div class="cond-block">
-          <div class="cond-question">❓ ${condLabel(cond)} か？</div>
+          <div class="cond-nested-row">
+            <div class="cond-nested-header">
+              <span class="cond-kw cond-kw-if">IF</span>
+              <span class="cond-nested-q">${condLabel(currentStep.condition1)} か？</span>
+            </div>
+            <div class="cond-branch cond-branch-yes" style="border-top:none">
+              <span class="cond-yn">YES</span>
+              <span>${branchDesc(currentStep.action1)}</span>
+            </div>
+          </div>
+          <div class="cond-nested-row">
+            <div class="cond-nested-header">
+              <span class="cond-kw cond-kw-elseif">ELSE&nbsp;IF</span>
+              <span class="cond-nested-q">${condLabel(currentStep.condition2)} か？</span>
+            </div>
+            <div class="cond-branch cond-branch-yes" style="border-top:none">
+              <span class="cond-yn">YES</span>
+              <span>${branchDesc(currentStep.action2)}</span>
+            </div>
+          </div>
+          <div class="cond-nested-row">
+            <div class="cond-nested-header">
+              <span class="cond-kw cond-kw-else">ELSE</span>
+              <span class="cond-nested-q" style="color:#ff9955">いずれにも当てはまらない場合</span>
+            </div>
+            <div class="cond-branch" style="border-top:none">
+              <span>${branchDesc(currentStep.actionFallback)}</span>
+            </div>
+          </div>
+        </div>`;
+    } else {
+      // Easy/Normal: 1段階 IF-ELSE
+      condBody = `
+        <div class="cond-block">
+          <div class="cond-question">❓ ${condLabel(currentStep.condition)} か？</div>
           <div class="cond-branch cond-branch-yes">
             <span class="cond-yn">YES</span>
             <span>${branchDesc(currentStep.ifTrue)}</span>
@@ -1354,7 +1485,12 @@ function renderWireManual(data) {
             <span class="cond-yn">NO</span>
             <span>${branchDesc(currentStep.ifFalse)}</span>
           </div>
-        </div>
+        </div>`;
+    }
+
+    currentBox = `
+      <div class="step-block" style="border-color:#3a7a3a;box-shadow:0 0 14px #00ff0022;margin-bottom:10px">
+        ${header}${condBody}
       </div>`;
   } else {
     currentBox = `
@@ -1495,7 +1631,6 @@ function renderReviewCond(step, data) {
   const cuts       = data.wireCuts || [];
   // 失敗ステップ時点での残りワイヤー本数（= 全本数 - それまでの成功切断数）
   const remaining  = totalWires - cuts.length;
-  const cond  = step.condition;
 
   function condLabel(c) {
     if (!c) return '';
@@ -1512,13 +1647,53 @@ function renderReviewCond(step, data) {
       : `見た目が <strong style="color:${w.color};text-shadow:0 0 4px ${w.color}88">${w.name}色</strong> のワイヤー`;
   }
 
-  let resolved = false;
-  if (cond) {
-    if (cond.type === 'gte')    resolved = remaining >= cond.value;
-    else if (cond.type === 'lte')    resolved = remaining <= cond.value;
-    else if (cond.type === 'parity') resolved = (remaining % 2 === 1 ? 'odd' : 'even') === cond.value;
+  // Hard: 入れ子3段階
+  if (step.nested) {
+    const c1 = evalCond(step.condition1, remaining);
+    const c2 = !c1 && evalCond(step.condition2, remaining);
+    const c3 = !c1 && !evalCond(step.condition2, remaining);
+    return `
+    <div class="rv-cond-block">
+      <div class="rv-cond-nested-row ${c1 ? 'rv-nested-hit' : ''}">
+        <div class="rv-nested-header">
+          <span class="cond-kw cond-kw-if">IF</span>
+          <span>${condLabel(step.condition1)} か？</span>
+          <span class="rv-cond-resolved">${c1 ? '→ YES ✓' : '→ NO'}</span>
+        </div>
+        <div class="rv-cond-row ${c1 ? 'rv-active' : 'rv-inactive'}" style="border-top:none">
+          <span class="rv-yn rv-yes">YES</span>
+          <span>${branchHtml(step.action1)}</span>
+          ${c1 ? '<span class="rv-correct-mark">← 正解ルート</span>' : ''}
+        </div>
+      </div>
+      <div class="rv-cond-nested-row ${c2 ? 'rv-nested-hit' : ''}">
+        <div class="rv-nested-header">
+          <span class="cond-kw cond-kw-elseif">ELSE&nbsp;IF</span>
+          <span>${condLabel(step.condition2)} か？</span>
+          <span class="rv-cond-resolved">${c1 ? '（スキップ）' : c2 ? '→ YES ✓' : '→ NO'}</span>
+        </div>
+        <div class="rv-cond-row ${c2 ? 'rv-active' : 'rv-inactive'}" style="border-top:none">
+          <span class="rv-yn rv-yes">YES</span>
+          <span>${branchHtml(step.action2)}</span>
+          ${c2 ? '<span class="rv-correct-mark">← 正解ルート</span>' : ''}
+        </div>
+      </div>
+      <div class="rv-cond-nested-row ${c3 ? 'rv-nested-hit' : ''}">
+        <div class="rv-nested-header">
+          <span class="cond-kw cond-kw-else">ELSE</span>
+          <span class="rv-cond-resolved" style="color:#ff9955;margin-left:0">いずれにも当てはまらない場合</span>
+        </div>
+        <div class="rv-cond-row ${c3 ? 'rv-active' : 'rv-inactive'}" style="border-top:none">
+          <span>${branchHtml(step.actionFallback)}</span>
+          ${c3 ? '<span class="rv-correct-mark">← 正解ルート</span>' : ''}
+        </div>
+      </div>
+    </div>`;
   }
 
+  // Easy/Normal: 1段階
+  const cond = step.condition;
+  const resolved = evalCond(cond, remaining);
   return `
     <div class="rv-cond-block">
       <div class="rv-cond-q">❓ ${condLabel(cond)} か？</div>
