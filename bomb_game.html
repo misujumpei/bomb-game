@@ -124,6 +124,51 @@
                 font-size: 0.82rem; margin-top: 10px; }
     .btn-swap:active:not(:disabled) { transform: scale(0.97); }
 
+    /* REVIEW (答え合わせ) SCREEN */
+    .review-wrap { max-width: 440px; margin: 0 auto; padding-bottom: 12px; }
+    .review-header { text-align: center; margin-bottom: 14px; }
+    .review-title { font-size: 1.4rem; font-weight: 900; color: #ff5a5a; margin: 6px 0 3px; }
+    .review-sub { font-size: 0.78rem; color: #7a3a3a; letter-spacing: 0.5px; }
+    .rv-section { background: #0e0e16; border: 1px solid #2a2a38; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .rv-section-label { font-size: 0.68rem; letter-spacing: 2px; color: #444; margin-bottom: 8px; }
+
+    /* 答え合わせ：条件ブロック */
+    .rv-cond-block { background: #080d08; border-radius: 8px; padding: 8px 10px; }
+    .rv-cond-q { font-size: 0.8rem; color: #c8b84a; margin-bottom: 8px; font-weight: bold; }
+    .rv-cond-row { display: flex; align-items: flex-start; gap: 8px; padding: 5px 4px; border-top: 1px solid #1a2a1a; font-size: 0.85rem; transition: opacity 0.2s; }
+    .rv-yn { font-size: 0.68rem; font-weight: bold; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; margin-top: 2px; }
+    .rv-yes { background: #163016; color: #6aee6a; border: 1px solid #2a6a2a; }
+    .rv-no  { background: #301616; color: #ee6a6a; border: 1px solid #6a2a2a; }
+    .rv-active { opacity: 1; }
+    .rv-inactive { opacity: 0.3; }
+    .rv-correct-mark { color: #7aff7a; font-size: 0.7rem; font-weight: bold; white-space: nowrap; margin-left: 4px; flex-shrink: 0; }
+
+    /* 答え合わせ：ワイヤーリスト */
+    .rv-wire-item { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 8px; border: 1px solid #1a1a22; margin-bottom: 4px; transition: border-color 0.2s; }
+    .rv-wire-item.rv-wire-correct  { border-color: #2a6a2a; background: #050e05; }
+    .rv-wire-item.rv-wire-wrong    { border-color: #6a1a1a; background: #0e0505; }
+    .rv-wire-item.rv-wire-decoy-cut{ border-color: #6a3a00; background: #0e0800; }
+    .rv-wire-item.rv-wire-decoy    { border-color: #2a2000; }
+    .rv-wire-item.rv-prev-cut      { opacity: 0.3; }
+    .rv-wire-num { font-size: 0.75rem; color: #555; flex-shrink: 0; width: 14px; text-align: center; }
+    .rv-wire-cable-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .rv-wire-cable { height: 20px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .rv-wire-lbl { font-size: 0.72rem; font-weight: 900; letter-spacing: 1px; text-shadow: 1px 1px 0 #000b, -1px -1px 0 #000b; }
+    .rv-wire-hints { display: flex; gap: 10px; font-size: 0.6rem; padding: 0 2px; }
+    .rv-wire-badges { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .rv-badge { font-size: 0.65rem; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+    .rv-badge-done    { color: #3a5a3a; }
+    .rv-badge-correct { color: #7aff7a; background: #0a1a0a; border: 1px solid #2a5a2a; }
+    .rv-badge-wrong   { color: #ff7a7a; background: #1a0a0a; border: 1px solid #5a2a2a; }
+    .rv-badge-decoy   { color: #ffaa50; background: #140a00; border: 1px solid #4a2a00; }
+
+    /* 答え合わせ：Readyエリア */
+    .rv-ready-area { text-align: center; margin-top: 12px; }
+    .rv-ready-status { display: flex; justify-content: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .rv-ready-pip { padding: 3px 12px; border-radius: 12px; font-size: 0.75rem; }
+    .rv-ready-pip.ready   { background: #0a1a0a; color: #5aff5a; border: 1px solid #2a5a2a; }
+    .rv-ready-pip.waiting { background: #1a1a22; color: #555;    border: 1px solid #2a2a32; }
+
     /* ROUND INDICATOR */
     .round-bar {
       display: flex; align-items: center; justify-content: center;
@@ -566,6 +611,29 @@
     </div>
     <button id="swap-btn-round" class="btn btn-swap" onclick="requestSwap()" style="margin-bottom:8px">🔄 役割を交代する</button>
     <p class="next-info" id="re-next"></p>
+  </div>
+</div>
+
+<!-- REVIEW (答え合わせ) -->
+<div id="screen-review" class="screen">
+  <div class="review-wrap">
+    <div class="review-header">
+      <div style="font-size:2.4rem">💥</div>
+      <div class="review-title">ラウンド <span id="rv-round"></span> 失敗</div>
+      <p class="review-sub" id="rv-reason"></p>
+    </div>
+    <div class="rv-section">
+      <div class="rv-section-label">📖 マニュアルに表示されていた指示</div>
+      <div id="rv-manual"></div>
+    </div>
+    <div class="rv-section">
+      <div class="rv-section-label">💣 爆弾パネルのワイヤー一覧</div>
+      <div id="rv-wires"></div>
+    </div>
+    <div class="rv-ready-area">
+      <div class="rv-ready-status" id="rv-ready-status"></div>
+      <button class="btn btn-yellow" id="rv-ready-btn" onclick="voteReviewReady()">✅ 納得した！次へ進む</button>
+    </div>
   </div>
 </div>
 
@@ -1018,15 +1086,21 @@ function handleStateChange(data) {
     }
   }
 
+  // review の Ready 状態変化はキーチェックより先に処理
+  if (data.state === 'review' && data.reviewReady) {
+    updateReviewReadyDisplay(data.reviewReady, data);
+  }
+
   const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',');
   if (key === lastDataStr) return;
   lastDataStr = key;
 
   switch (data.state) {
-    case 'phase1': enterPhase1(data); break;
-    case 'phase2': enterPhase2(data); break;
-    case 'round-end': enterRoundEnd(data); break;
-    case 'match-end': enterMatchEnd(data); break;
+    case 'phase1':     enterPhase1(data);    break;
+    case 'phase2':     enterPhase2(data);    break;
+    case 'review':     enterReview(data);    break;
+    case 'round-end':  enterRoundEnd(data);  break;
+    case 'match-end':  enterMatchEnd(data);  break;
   }
 }
 
@@ -1194,11 +1268,14 @@ function renderWirePanel(data) {
 }
 
 async function cutWire(idx, data) {
-  // 罠ワイヤーを切ったら即失敗
+  // 罠ワイヤーを切ったら答え合わせへ
   if ((data.wireDecoys || []).includes(idx)) {
     playCut();
     playError();
-    setTimeout(() => roomRef.update({ state: 'round-end', roundResult: 'failed' }), 300);
+    setTimeout(() => roomRef.update({
+      state: 'review', failedWireIdx: idx, failReason: 'decoy',
+      reviewReady: { host: false, guest: false }
+    }), 300);
     return;
   }
 
@@ -1209,7 +1286,10 @@ async function cutWire(idx, data) {
   playCut();
   if (idx !== correctIdx) {
     playError();
-    setTimeout(() => roomRef.update({ state: 'round-end', roundResult: 'failed' }), 300);
+    setTimeout(() => roomRef.update({
+      state: 'review', failedWireIdx: idx, failReason: 'wrong_cut',
+      reviewReady: { host: false, guest: false }
+    }), 300);
     return;
   }
   if (cuts.length === data.wireSequence.length) {
@@ -1358,13 +1438,175 @@ function startTimer(startTime, duration) {
     });
     if (remaining < 20 && bgmSpeed > 280) { bgmSpeed = Math.max(280, bgmSpeed - 5); }
     if (remaining <= 0) {
-      if (role === 'host') roomRef.update({ state: 'round-end', roundResult: 'failed' });
+      if (role === 'host') roomRef.update({
+        state: 'review', failedWireIdx: -1, failReason: 'timeout',
+        reviewReady: { host: false, guest: false }
+      });
       return;
     }
     timerHandle = setTimeout(tick, 250);
   };
   const wait = startTime - Date.now();
   setTimeout(tick, Math.max(0, wait));
+}
+
+// ===== REVIEW (答え合わせ) =====
+function enterReview(data) {
+  clearTimeout(timerHandle);
+  stopBGM();
+  timerStarted = false;
+  phaseRendered = null;
+  if (data.failReason === 'timeout') { playExplosion(); flashRed(); }
+  showScreen('review');
+  renderReview(data);
+}
+
+function renderReview(data) {
+  const cuts       = data.wireCuts    || [];
+  const failIdx    = data.failedWireIdx ?? -1;
+  const failReason = data.failReason  || 'unknown';
+  const stepIdx    = cuts.length;
+  const correctIdx = (data.wireSequence && stepIdx < data.wireSequence.length)
+                     ? data.wireSequence[stepIdx] : -1;
+
+  document.getElementById('rv-round').textContent = data.round;
+  const reasonMap = {
+    wrong_cut: `${stepIdx + 1}本目：間違ったワイヤーを切ってしまった`,
+    decoy:     `${stepIdx + 1}本目：切ってはいけないワイヤーを切ってしまった`,
+    timeout:   `時間切れ（${stepIdx + 1}本目の途中）`,
+  };
+  document.getElementById('rv-reason').textContent = reasonMap[failReason] || '';
+
+  // マニュアルの指示セクション
+  const step = data.wireSteps ? data.wireSteps[stepIdx] : null;
+  document.getElementById('rv-manual').innerHTML =
+    step ? renderReviewCond(step, data) : '<p style="color:#555;font-size:0.8rem">指示情報なし（最終ステップ完了後の失敗）</p>';
+
+  // ワイヤー一覧セクション
+  document.getElementById('rv-wires').innerHTML = renderReviewWires(data, correctIdx, failIdx, failReason);
+
+  updateReviewReadyDisplay(data.reviewReady || {}, data);
+}
+
+function renderReviewCond(step, data) {
+  const total = data.wireVisuals.length;
+  const cond  = step.condition;
+
+  function condLabel(c) {
+    if (!c) return '';
+    if (c.type === 'gte')    return `ワイヤーが <strong>${c.value}本以上</strong>`;
+    if (c.type === 'lte')    return `ワイヤーが <strong>${c.value}本以下</strong>`;
+    if (c.type === 'parity') return `ワイヤーの本数が <strong>${c.value === 'odd' ? '奇数' : '偶数'}</strong>`;
+    return '';
+  }
+  function branchHtml(branch) {
+    if (!branch) return '?';
+    const w = wireById(branch.targetId);
+    return branch.criterion === 'text'
+      ? `ラベルに <strong style="color:${w.color};text-shadow:0 0 4px ${w.color}88">&nbsp;${w.name}&nbsp;</strong> と書かれたワイヤー`
+      : `見た目が <strong style="color:${w.color};text-shadow:0 0 4px ${w.color}88">${w.name}色</strong> のワイヤー`;
+  }
+
+  let resolved = false;
+  if (cond) {
+    if (cond.type === 'gte')    resolved = total >= cond.value;
+    else if (cond.type === 'lte')    resolved = total <= cond.value;
+    else if (cond.type === 'parity') resolved = (total % 2 === 1 ? 'odd' : 'even') === cond.value;
+  }
+
+  return `
+    <div class="rv-cond-block">
+      <div class="rv-cond-q">❓ ${condLabel(cond)} か？（全 ${total} 本）</div>
+      <div class="rv-cond-row ${resolved ? 'rv-active' : 'rv-inactive'}">
+        <span class="rv-yn rv-yes">YES</span>
+        <span>${branchHtml(step.ifTrue)}</span>
+        ${resolved ? '<span class="rv-correct-mark">← 正解ルート</span>' : ''}
+      </div>
+      <div class="rv-cond-row ${!resolved ? 'rv-active' : 'rv-inactive'}">
+        <span class="rv-yn rv-no">NO</span>
+        <span>${branchHtml(step.ifFalse)}</span>
+        ${!resolved ? '<span class="rv-correct-mark">← 正解ルート</span>' : ''}
+      </div>
+    </div>`;
+}
+
+function renderReviewWires(data, correctIdx, failIdx, failReason) {
+  const cuts   = data.wireCuts   || [];
+  const decoys = data.wireDecoys || [];
+  let html = '';
+
+  data.wireVisuals.forEach((visualId, i) => {
+    const visual = wireById(visualId);
+    const text   = wireById(data.wireTexts[i]);
+    const prevCut    = cuts.includes(i);
+    const isCorrect  = i === correctIdx && failReason !== 'wrong_cut' || i === correctIdx;
+    const isWrongCut = failIdx >= 0 && i === failIdx && !decoys.includes(i);
+    const isDecoyCut = failIdx >= 0 && i === failIdx && decoys.includes(i);
+    const isDecoy    = decoys.includes(i) && i !== failIdx;
+
+    // 正解は「間違い切り」「デコイ切り」「タイムアウト」すべてで表示
+    const showCorrect = i === correctIdx && (failReason === 'wrong_cut' || failReason === 'decoy' || failReason === 'timeout');
+
+    let cls   = 'rv-wire-item';
+    let badge = '';
+    if (prevCut)    { cls += ' rv-prev-cut'; badge = '<span class="rv-badge rv-badge-done">✓ 切断済</span>'; }
+    if (showCorrect){ cls += ' rv-wire-correct'; badge += '<span class="rv-badge rv-badge-correct">← 正解</span>'; }
+    if (isWrongCut) { cls += ' rv-wire-wrong';   badge += '<span class="rv-badge rv-badge-wrong">← ❌ 切った</span>'; }
+    if (isDecoyCut) { cls += ' rv-wire-decoy-cut'; badge += '<span class="rv-badge rv-badge-wrong">← ❌ 罠を切った</span>'; }
+    if (isDecoy)    { cls += ' rv-wire-decoy';   badge += '<span class="rv-badge rv-badge-decoy">🚫 罠</span>'; }
+
+    html += `
+      <div class="${cls}">
+        <span class="rv-wire-num">${i + 1}</span>
+        <div class="rv-wire-cable-col">
+          <div class="rv-wire-cable" style="background:${visual.color};box-shadow:0 0 6px ${visual.glow}">
+            <span class="rv-wire-lbl" style="color:${text.color}">${text.name}</span>
+          </div>
+          <div class="rv-wire-hints">
+            <span style="color:${visual.color}">見た目:${visual.name}</span>
+            <span style="color:${text.color}">ラベル:${text.name}</span>
+          </div>
+        </div>
+        <div class="rv-wire-badges">${badge}</div>
+      </div>`;
+  });
+  return html;
+}
+
+async function voteReviewReady() {
+  document.getElementById('rv-ready-btn').disabled = true;
+  await roomRef.child('reviewReady').update({ [role]: true });
+}
+
+function updateReviewReadyDisplay(reviewReady, data) {
+  const btn = document.getElementById('rv-ready-btn');
+  if (!btn) return;
+
+  const otherKey  = role === 'host' ? 'guest' : 'host';
+  const otherName = role === 'host' ? (data.guestName || 'ゲスト') : (data.hostName || 'ホスト');
+  const myReady    = reviewReady[role];
+  const otherReady = reviewReady[otherKey];
+
+  btn.disabled = !!myReady;
+
+  const statusEl = document.getElementById('rv-ready-status');
+  if (statusEl) {
+    const myPip    = `<span class="rv-ready-pip ${myReady ? 'ready' : 'waiting'}">${myReady ? '✓ あなた' : 'あなた...'}</span>`;
+    const otherPip = `<span class="rv-ready-pip ${otherReady ? 'ready' : 'waiting'}">${otherReady ? `✓ ${otherName}` : `${otherName}...`}</span>`;
+    statusEl.innerHTML = myPip + otherPip;
+  }
+
+  // 両者 OK → ホストが round-end へ進める
+  if (reviewReady.host && reviewReady.guest && role === 'host') {
+    const results   = { ...(data.results || {}), [data.round]: 'failed' };
+    const cleared   = Object.values(results).filter(v => v === 'success').length;
+    const failedCnt = Object.values(results).filter(v => v === 'failed').length;
+    if (data.round >= TOTAL_ROUNDS) {
+      roomRef.update({ state: 'match-end', finalResults: results, clearedCount: cleared, failedCount: failedCnt });
+    } else {
+      roomRef.update({ state: 'round-end', roundResult: 'failed', results });
+    }
+  }
 }
 
 // ===== ROUND END =====
@@ -1375,7 +1617,8 @@ function enterRoundEnd(data) {
   phaseRendered = null;
 
   const success = data.roundResult === 'success';
-  if (success) playSuccess(); else { playExplosion(); flashRed(); }
+  if (success) { playSuccess(); }
+  // 失敗音は review 画面入場時に既に再生済み
 
   const results   = data.results || {};
   results[data.round] = data.roundResult;
