@@ -201,16 +201,47 @@
     .manual-title-text { font-size: 0.6rem; letter-spacing: 3px; color: #2a5a2a; }
     .manual-sub { color: #1e3a1e; font-size: 0.72rem; margin-bottom: 14px; text-align: center; }
 
-    /* RULE BOX */
-    .rule-box {
-      background: #0a180a; border: 1px solid #1a3a1a; border-radius: 8px;
-      padding: 12px 14px; margin-bottom: 14px;
+    /* STEP MANUAL */
+    .step-block {
+      background: #0a180a; border: 1px solid #1a3a1a; border-radius: 10px;
+      padding: 12px 14px; margin-bottom: 10px;
     }
-    .rule-title { font-size: 0.65rem; letter-spacing: 2px; color: #2a5a2a; margin-bottom: 8px; }
-    .rule-question { color: #4aaa4a; font-size: 0.82rem; margin-bottom: 10px; }
-    .rule-branch { margin-bottom: 6px; }
-    .rule-cond { font-size: 0.72rem; color: #3a6a3a; margin-bottom: 4px; }
-    .rule-seq { display: flex; flex-wrap: wrap; gap: 4px; }
+    .step-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    }
+    .step-num {
+      background: #1e5a1e; color: #5aff5a; font-size: 0.75rem; font-weight: 900;
+      border-radius: 50%; width: 22px; height: 22px; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-label { font-size: 0.72rem; letter-spacing: 2px; color: #3a7a3a; }
+    .step-question {
+      background: #0f240f; border: 1px solid #2a5a2a; border-radius: 8px;
+      padding: 10px 12px; font-size: 0.9rem; color: #7aff7a; line-height: 1.6;
+    }
+    .step-branch { margin-bottom: 8px; }
+    .step-cond {
+      font-size: 0.72rem; color: #3a7a3a; margin-bottom: 5px; padding-left: 4px;
+      border-left: 2px solid #2a5a2a;
+    }
+    .step-seq { display: flex; flex-wrap: wrap; gap: 5px; margin-left: 4px; }
+    .step-seq-item {
+      padding: 3px 9px; border-radius: 5px; border: 1px solid;
+      font-size: 0.8rem; font-weight: bold;
+    }
+    .step-seq-arrow { color: #2a4a2a; padding: 0 1px; align-self: center; }
+    .step-progress { display: flex; flex-direction: column; gap: 6px; }
+    .step-prog-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 8px;
+      background: #101810; border: 1px solid #182018; transition: all 0.2s;
+    }
+    .step-prog-item.current { background: #142014; border-color: #2e5a2e; box-shadow: 0 0 12px #00ff0018; }
+    .step-prog-item.done { opacity: 0.3; }
+    .step-prog-num { font-size: 0.7rem; color: #2a4a2a; min-width: 18px; }
+    .step-prog-name { font-size: 1rem; font-weight: bold; flex: 1; }
+    .step-prog-mark { font-size: 0.85rem; }
+    /* legacy compat */
     .rule-seq-item {
       padding: 3px 8px; border-radius: 4px; border: 1px solid #1a3a1a;
       font-size: 0.78rem; font-weight: bold;
@@ -957,41 +988,64 @@ function renderWireManual(data) {
   });
   renderRoundBar('round-bar-mp2', data.round, data.results);
 
-  // Rule box
   const rule = data.rule;
-  const seqHtml = seq => seq.map(id => {
+
+  // seqをカラーチップで表示するヘルパー
+  const seqChips = seq => seq.map(id => {
     const w = wireById(id);
-    return `<span class="rule-seq-item" style="color:${w.color};border-color:${w.color}44">${w.name}</span>`;
-  }).join('<span style="color:#2a4a2a;padding:0 2px">→</span>');
+    return `<span class="step-seq-item" style="color:${w.color};border-color:${w.color}55;background:${w.color}11">${w.name}</span>`;
+  }).join('<span class="step-seq-arrow">→</span>');
 
   document.getElementById('rule-display').innerHTML = `
-    <div class="rule-title">━ 解除ルール ━</div>
-    <div class="rule-question">${rule.queryLabel}</div>
-    <div class="rule-branch">
-      <div class="rule-cond">${rule.trueLabel}</div>
-      <div class="rule-seq">${seqHtml(rule.seqIfTrue)}</div>
+    <!-- STEP 1 -->
+    <div class="step-block">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-label">ホストに質問する</div>
+      </div>
+      <div class="step-question">${rule.queryLabel.replace('とホストに聞け','')}</div>
     </div>
-    ${rule.falseLabel ? `
-    <div class="rule-branch" style="margin-top:8px">
-      <div class="rule-cond">${rule.falseLabel}</div>
-      <div class="rule-seq">${seqHtml(rule.seqIfFalse)}</div>
-    </div>` : ''}
+
+    <!-- STEP 2 -->
+    <div class="step-block">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-label">答えに応じて切断順を決める</div>
+      </div>
+      <div class="step-branch">
+        <div class="step-cond">${rule.trueLabel.split('→')[0].trim()} →</div>
+        <div class="step-seq">${seqChips(rule.seqIfTrue)}</div>
+      </div>
+      ${rule.falseLabel ? `
+      <div class="step-branch" style="margin-top:10px">
+        <div class="step-cond">${rule.falseLabel.split('→')[0].trim()} →</div>
+        <div class="step-seq">${seqChips(rule.seqIfFalse)}</div>
+      </div>` : ''}
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step-block">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-label">この順番でホストに切らせる（${cuts.length}／${data.wireSequence.length} 完了）</div>
+      </div>
+      <div class="step-progress">
+        ${data.wireSequence.map((wireId, i) => {
+          const w       = wireById(wireId);
+          const done    = i < cuts.length;
+          const current = i === cuts.length;
+          return `<div class="step-prog-item ${done ? 'done' : ''} ${current ? 'current' : ''}">
+            <span class="step-prog-num">${i + 1}</span>
+            <span class="step-prog-name" style="color:${w.color}">${w.name}</span>
+            <span class="step-prog-mark">${done ? '✓' : current ? '← 今ここ' : ''}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
   `;
 
-  // Sequence list (show both but indicate which cuts already done)
-  const usedIndices = cuts.map(k => parseInt(k.split('_')[1]));
-  const seq = document.getElementById('sequence-display');
-  seq.innerHTML = data.wireSequence.map((wireId, i) => {
-    const wire    = wireById(wireId);
-    const done    = i < cuts.length;
-    const current = i === cuts.length;
-    return `<div class="seq-item ${done ? 'done' : ''} ${current ? 'current' : ''}">
-      <span class="seq-num">${i + 1}</span>
-      <span class="seq-color-name" style="color:${wire.color}">${wire.name}のワイヤー</span>
-      ${current ? '<span class="seq-arrow">← 今ここ</span>' : ''}
-      ${done    ? '<span class="seq-check">✓</span>' : ''}
-    </div>`;
-  }).join('');
+  // sequence-display は rule-display 内に統合したので空にする
+  document.getElementById('sequence-display').innerHTML = '';
 }
 
 // ===== TIMER =====
