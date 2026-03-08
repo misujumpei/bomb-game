@@ -114,6 +114,39 @@
     .rv-nested-hit .rv-nested-header { color: #7aff7a; }
     .rv-cond-resolved { font-size: 0.72rem; color: #666; margin-left: auto; white-space: nowrap; }
 
+    /* FINAL ARM SCREEN */
+    .fa-wrap { text-align: center; padding: 8px 0; }
+    .fa-header { font-size: 0.65rem; letter-spacing: 5px; color: #c42020; margin-bottom: 8px; }
+    .fa-title { font-size: 1.5rem; font-weight: bold; color: #ff4040;
+      text-shadow: 0 0 20px #ff404077; margin-bottom: 4px; }
+    .fa-sub { font-size: 0.82rem; color: #888; margin-bottom: 28px; }
+    #final-arm-btn {
+      width: 200px; height: 200px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 36%, #ff6050, #c42020 55%, #7a0808);
+      border: 5px solid #ff5050; color: #fff;
+      font-size: 1.5rem; font-weight: 900; letter-spacing: 2px; line-height: 1.3;
+      cursor: pointer; font-family: 'Courier New', monospace;
+      box-shadow: 0 0 40px #ff000077, 0 0 100px #ff000022;
+      animation: fa-pulse 1.2s infinite;
+      transition: transform 0.1s, opacity 0.2s;
+      margin: 0 auto 28px; display: block;
+    }
+    #final-arm-btn:active:not(:disabled) { transform: scale(0.91); }
+    #final-arm-btn:disabled { opacity: 0.4; animation: none; cursor: default; }
+    @keyframes fa-pulse {
+      0%,100% { box-shadow: 0 0 40px #ff000077, 0 0 100px #ff000022; }
+      50%      { box-shadow: 0 0 60px #ff0000bb, 0 0 140px #ff000044; }
+    }
+    .fa-status-row { display: flex; gap: 12px; justify-content: center; margin-bottom: 20px; }
+    .fa-pip {
+      padding: 8px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: bold;
+      background: #1a1a20; border: 1px solid #3a3a44; color: #444; transition: all 0.3s;
+    }
+    .fa-pip.pressed  { background: #163016; border-color: #2a6a2a; color: #6aee6a; }
+    .fa-pip.awaiting { background: #2a1200; border-color: #7a3000; color: #ffaa44; animation: pulse 0.7s infinite; }
+    .fa-result-msg { font-size: 1.5rem; font-weight: bold; min-height: 2rem; margin-bottom: 6px; }
+    .fa-timing-hint { font-size: 0.72rem; color: #3a3a4a; letter-spacing: 1px; }
+
     /* ROLE SWAP OVERLAY */
     #swap-overlay {
       display: none; position: fixed; inset: 0; z-index: 200;
@@ -610,6 +643,22 @@
   </div>
 </div>
 
+<!-- FINAL ARM -->
+<div id="screen-final-arm" class="screen">
+  <div class="fa-wrap">
+    <div class="fa-header">⚡ FINAL PHASE ⚡</div>
+    <div class="fa-title">最終解除フェーズ</div>
+    <p class="fa-sub">2人同時にボタンを押せ！（500ms以内）</p>
+    <button id="final-arm-btn" onclick="pressFinalArmBtn()">💥<br>解除</button>
+    <div class="fa-status-row">
+      <div class="fa-pip" id="fa-pip-host">💣 <span id="fa-name-host">ホスト</span></div>
+      <div class="fa-pip" id="fa-pip-guest">📖 <span id="fa-name-guest">ゲスト</span></div>
+    </div>
+    <div class="fa-result-msg" id="fa-result-msg"></div>
+    <div class="fa-timing-hint" id="fa-timing-hint">声を掛け合って同時に押せ！</div>
+  </div>
+</div>
+
 <!-- ROUND END -->
 <div id="screen-round-end" class="screen">
   <div class="round-end-wrap">
@@ -702,7 +751,7 @@ const TOTAL_ROUNDS = 3;
 
 // ===== STATE =====
 let roomId, role, roomRef, myName;
-let timerHandle, roundEndHandle;
+let timerHandle, roundEndHandle, finalArmTimeoutHandle;
 let timerStarted = false, phaseRendered = null;
 let lastDataStr = '';
 let selectedDifficulty = 'hard';
@@ -1130,7 +1179,8 @@ async function startRound(round, results, cleared, failed, diff) {
     wireCuts:       [],
     gameRoles:      storedGameRoles,
     swapReq:        null,
-    playAgain: { host: false, guest: false }
+    playAgain: { host: false, guest: false },
+    finalArm:  null,
   });
 }
 
@@ -1188,13 +1238,16 @@ function handleStateChange(data) {
     updateReviewReadyDisplay(data.reviewReady, data);
   }
 
-  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',');
+  const fa    = data.finalArm || {};
+  const faFp  = (fa.hostTs ? 'H' : '') + (fa.guestTs ? 'G' : '');
+  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',') + '_' + faFp;
   if (key === lastDataStr) return;
   lastDataStr = key;
 
   switch (data.state) {
     case 'phase1':     enterPhase1(data);    break;
     case 'phase2':     enterPhase2(data);    break;
+    case 'final-arm':  enterFinalArm(data);  break;
     case 'review':     enterReview(data);    break;
     case 'round-end':  enterRoundEnd(data);  break;
     case 'match-end':  enterMatchEnd(data);  break;
@@ -1390,8 +1443,7 @@ async function cutWire(idx, data) {
     return;
   }
   if (cuts.length === data.wireSequence.length) {
-    playSuccess();
-    await roomRef.update({ wireCuts: cuts, state: 'round-end', roundResult: 'success' });
+    await roomRef.update({ wireCuts: cuts, state: 'final-arm', finalArm: { hostTs: null, guestTs: null } });
   } else {
     await roomRef.update({ wireCuts: cuts });
   }
@@ -1558,6 +1610,103 @@ function renderWireManual(data) {
     </div>`;
 
   document.getElementById('sequence-display').innerHTML = '';
+}
+
+// ===== FINAL ARM =====
+function enterFinalArm(data) {
+  // タイマー停止・BGM停止
+  clearTimeout(timerHandle);
+  clearTimeout(finalArmTimeoutHandle);
+  stopBGM();
+  timerStarted = false;
+  showScreen('final-arm');
+
+  const fa = data.finalArm || {};
+  const hostPressed  = !!fa.hostTs;
+  const guestPressed = !!fa.guestTs;
+
+  // 名前セット
+  document.getElementById('fa-name-host').textContent  = data.hostName  || 'ホスト';
+  document.getElementById('fa-name-guest').textContent = data.guestName || 'ゲスト';
+
+  // ボタン：自分が押済みなら無効化
+  const myPressed = role === 'host' ? hostPressed : guestPressed;
+  document.getElementById('final-arm-btn').disabled = myPressed;
+
+  const hostPip  = document.getElementById('fa-pip-host');
+  const guestPip = document.getElementById('fa-pip-guest');
+  const resultEl = document.getElementById('fa-result-msg');
+  const hintEl   = document.getElementById('fa-timing-hint');
+
+  // ピップのクラスリセット
+  hostPip.className  = 'fa-pip' + (hostPressed  ? ' pressed' : '');
+  guestPip.className = 'fa-pip' + (guestPressed ? ' pressed' : '');
+
+  if (hostPressed && guestPressed) {
+    // 両者押済み → ホストが判定して結果を書き込む
+    hintEl.textContent = '判定中...';
+    if (role === 'host') {
+      const diff = Math.abs(fa.hostTs - fa.guestTs);
+      if (diff <= 500) {
+        resultEl.textContent = '完全解除！！ 🎉';
+        resultEl.style.color = '#5aff5a';
+        hintEl.textContent = `ズレ: ${diff}ms — 完璧だ！`;
+        playSuccess();
+        const results = { ...(data.results || {}), [data.round]: 'success' };
+        const cleared   = Object.values(results).filter(v => v === 'success').length;
+        const failedCnt = Object.values(results).filter(v => v === 'failed').length;
+        setTimeout(() => {
+          if (data.round >= TOTAL_ROUNDS) {
+            roomRef.update({ state: 'match-end', finalResults: results, clearedCount: cleared, failedCount: failedCnt });
+          } else {
+            roomRef.update({ state: 'round-end', roundResult: 'success', results });
+          }
+        }, 1800);
+      } else {
+        resultEl.textContent = '爆発！ 💥';
+        resultEl.style.color = '#ff5050';
+        hintEl.textContent = `ズレ: ${diff}ms — 500ms以内に揃えろ！`;
+        playExplosion(); flashRed();
+        const results = { ...(data.results || {}), [data.round]: 'failed' };
+        setTimeout(() => {
+          roomRef.update({ state: 'round-end', roundResult: 'failed', results });
+        }, 2200);
+      }
+    }
+  } else if (hostPressed || guestPressed) {
+    // 片方だけ押済み → 相手を待機中
+    const waitingPip = hostPressed ? guestPip : hostPip;
+    waitingPip.classList.add('awaiting');
+    resultEl.textContent = '';
+    hintEl.textContent = '相手がボタンを押すのを待っています...';
+    // ホストが2秒タイムアウトを管理する
+    if (role === 'host') {
+      finalArmTimeoutHandle = setTimeout(() => {
+        roomRef.once('value', snap => {
+          const d = snap.val();
+          if (!d || d.state !== 'final-arm') return;
+          const fa2 = d.finalArm || {};
+          if (!fa2.hostTs || !fa2.guestTs) {
+            playExplosion(); flashRed();
+            const results = { ...(d.results || {}), [d.round]: 'failed' };
+            roomRef.update({ state: 'round-end', roundResult: 'failed', results });
+          }
+        });
+      }, 2000);
+    }
+  } else {
+    // 誰も押していない
+    resultEl.textContent = '';
+    hintEl.textContent = '声を掛け合って同時に押せ！';
+  }
+}
+
+async function pressFinalArmBtn() {
+  document.getElementById('final-arm-btn').disabled = true;
+  // ServerValue.TIMESTAMP でサーバー時刻を書き込む（端末時計のズレを回避）
+  await roomRef.child('finalArm').update({
+    [role + 'Ts']: firebase.database.ServerValue.TIMESTAMP,
+  });
 }
 
 // ===== TIMER =====
@@ -1980,6 +2129,7 @@ function backToTitle() {
   if (roomRef) { roomRef.off(); roomRef = null; }
   clearTimeout(timerHandle);
   clearTimeout(roundEndHandle);
+  clearTimeout(finalArmTimeoutHandle);
   stopBGM();
   timerStarted = false; phaseRendered = null; lastDataStr = '';
   storedThinking = { host: false, guest: false };
