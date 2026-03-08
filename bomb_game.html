@@ -97,6 +97,33 @@
     .cond-branch-yes .cond-yn { background: #163016; color: #6aee6a; border: 1px solid #2a6a2a; }
     .cond-branch-no  .cond-yn { background: #301616; color: #ee6a6a; border: 1px solid #6a2a2a; }
 
+    /* ROLE SWAP OVERLAY */
+    #swap-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.85);
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    #swap-overlay.active { display: flex; }
+    .swap-modal {
+      background: #16161e; border: 1px solid #3a3a54; border-radius: 14px;
+      padding: 28px 24px; max-width: 360px; width: 100%; text-align: center;
+    }
+    .swap-modal-icon { font-size: 2.4rem; margin-bottom: 10px; }
+    .swap-modal-title { font-size: 1rem; font-weight: bold; color: #c8c8e8; margin-bottom: 8px; }
+    .swap-modal-sub { font-size: 0.82rem; color: #555; margin-bottom: 4px; }
+    .swap-role-preview {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; margin: 16px 0;
+    }
+    .swap-role-tag { padding: 6px 12px; border-radius: 8px; font-weight: bold; font-size: 0.8rem; }
+    .role-bomber { background: #2a0a0a; color: #ff8080; border: 1px solid #6a2020; }
+    .role-manual { background: #0a2a0a; color: #80ff80; border: 1px solid #206a20; }
+    .swap-btn-row { display: flex; gap: 10px; margin-top: 16px; }
+    .swap-btn-row .btn { flex: 1; padding: 11px; }
+    .btn-swap { background: #1a1a2e; color: #8080cc; border: 1px solid #3a3a6a;
+                font-size: 0.82rem; margin-top: 10px; }
+    .btn-swap:active:not(:disabled) { transform: scale(0.97); }
+
     /* ROUND INDICATOR */
     .round-bar {
       display: flex; align-items: center; justify-content: center;
@@ -363,6 +390,28 @@
 </div>
 <div id="flash"></div>
 
+<!-- ROLE SWAP OVERLAY -->
+<div id="swap-overlay">
+  <!-- 待機中（送信側） -->
+  <div id="swap-waiting-view" class="swap-modal" style="display:none">
+    <div class="swap-modal-icon">🔄</div>
+    <div class="swap-modal-title">交代リクエスト送信中</div>
+    <p class="swap-modal-sub">相手の承認を待っています...</p>
+    <button class="btn btn-gray" onclick="cancelSwap()" style="margin-top:16px;padding:10px">キャンセル</button>
+  </div>
+  <!-- 受信モーダル（受け取り側） -->
+  <div id="swap-request-view" class="swap-modal" style="display:none">
+    <div class="swap-modal-icon">🔄</div>
+    <div class="swap-modal-title" id="swap-req-title">役割交代のリクエスト</div>
+    <div class="swap-role-preview" id="swap-role-preview"></div>
+    <p class="swap-modal-sub">承認すると次のラウンドから役割が変わります</p>
+    <div class="swap-btn-row">
+      <button class="btn btn-green" onclick="respondSwap(true)">承認する</button>
+      <button class="btn btn-gray" onclick="respondSwap(false)">断る</button>
+    </div>
+  </div>
+</div>
+
 <!-- TITLE -->
 <div id="screen-title" class="screen active">
   <div class="title-wrap">
@@ -385,7 +434,7 @@
     <p class="section-label">YOUR ROOM CODE</p>
     <div class="room-code" id="room-code-display"></div>
     <p class="wait-info">このコードを相手に伝えてください</p>
-    <p class="wait-name">あなた：<span id="host-name-disp" style="color:#ccc"></span>（爆弾係）</p>
+    <p class="wait-name">あなた：<span id="host-name-disp" style="color:#ccc"></span>（<span id="host-role-label">爆弾係</span>）</p>
     <p class="diff-label">— 難易度を選択 —</p>
     <div class="diff-selector">
       <button class="diff-btn" id="diff-easy" onclick="setDifficulty('easy')">
@@ -400,6 +449,7 @@
     </div>
     <p class="diff-info" id="diff-info-text">制限時間 80/60/45秒　ワイヤー 5/6/7本　複雑な計算</p>
     <p class="wait-info pulse" id="guest-status">相手の参加を待っています...</p>
+    <button id="swap-btn-lobby" class="btn btn-swap" onclick="requestSwap()" disabled style="margin-top:6px">🔄 役割を交代する</button>
     <button id="start-btn" class="btn btn-red" onclick="startMatch()" disabled style="margin-top:8px">ゲーム開始</button>
   </div>
 </div>
@@ -408,8 +458,9 @@
 <div id="screen-guest-wait" class="screen">
   <div class="wait-wrap">
     <p style="font-size:3rem;margin-bottom:20px">📖</p>
-    <p class="wait-name">あなた：<span id="guest-name-disp" style="color:#ccc"></span>（マニュアル係）</p>
+    <p class="wait-name">あなた：<span id="guest-name-disp" style="color:#ccc"></span>（<span id="guest-role-label">マニュアル係</span>）</p>
     <p class="wait-info pulse">ホストがゲームを開始するまで待っています...</p>
+    <button class="btn btn-swap" onclick="requestSwap()" style="margin-top:10px">🔄 役割を交代する</button>
   </div>
 </div>
 
@@ -513,6 +564,7 @@
         <div class="score-num" id="re-failed" style="color:#ff5a5a">0</div>
       </div>
     </div>
+    <button id="swap-btn-round" class="btn btn-swap" onclick="requestSwap()" style="margin-bottom:8px">🔄 役割を交代する</button>
     <p class="next-info" id="re-next"></p>
   </div>
 </div>
@@ -572,6 +624,8 @@ let selectedDifficulty = 'hard';
 let storedHostName = 'ホスト', storedGuestName = 'ゲスト';
 let storedThinking = { host: false, guest: false };
 let idleTimer = null, isThinkingState = false;
+let gameRole = null;  // 'bomber' | 'manual'  ← 表示上の役割（接続IDとは独立）
+let storedGameRoles = { host: 'bomber', guest: 'manual' };
 
 // ===== UTILS =====
 function shuffle(arr) {
@@ -852,7 +906,9 @@ async function becomeHost() {
   roomId  = Math.random().toString(36).slice(2, 6).toUpperCase();
   role    = 'host';
   roomRef = db.ref('rooms/' + roomId);
-  await roomRef.set({ state: 'waiting', hostName: myName, guestReady: false });
+  gameRole = 'bomber';
+  await roomRef.set({ state: 'waiting', hostName: myName, guestReady: false,
+    gameRoles: { host: 'bomber', guest: 'manual' }, swapReq: null });
   document.getElementById('room-code-display').textContent = roomId;
   document.getElementById('host-name-disp').textContent = myName;
   showScreen('host-wait');
@@ -865,6 +921,7 @@ async function becomeHost() {
       document.getElementById('guest-status').textContent = `✅ ${d.guestName}さんが参加しました！`;
       document.getElementById('guest-status').classList.remove('pulse');
       document.getElementById('start-btn').disabled = false;
+      document.getElementById('swap-btn-lobby').disabled = false;
     }
     handleStateChange(d);
   });
@@ -906,6 +963,8 @@ async function startRound(round, results, cleared, failed, diff) {
     wireDecoys:     stroopRule.wireDecoys,
     wireDecoyDescs: stroopRule.wireDecoyDescs,
     wireCuts:       [],
+    gameRoles:      storedGameRoles,
+    swapReq:        null,
     playAgain: { host: false, guest: false }
   });
 }
@@ -921,6 +980,7 @@ async function joinRoom() {
     return;
   }
   roomId = code; role = 'guest';
+  gameRole = 'manual';
   roomRef = db.ref('rooms/' + roomId);
   await roomRef.update({ guestReady: true, guestName: myName });
   document.getElementById('guest-name-disp').textContent = myName;
@@ -932,6 +992,16 @@ async function joinRoom() {
 
 // ===== STATE MACHINE =====
 function handleStateChange(data) {
+  // gameRoles を常に最新に保つ
+  if (data.gameRoles) {
+    storedGameRoles = data.gameRoles;
+    gameRole = storedGameRoles[role];
+  }
+  // スワップリクエスト処理（キーチェックより先に行う）
+  handleSwapRequest(data);
+  // ロビーの役割表示を更新
+  updateLobbyRoleLabels();
+
   // Play again handler (match-end screen)
   if (data.state === 'match-end' && data.playAgain) {
     const otherKey  = role === 'host' ? 'guest' : 'host';
@@ -985,7 +1055,7 @@ function enterPhase1(data) {
 
   const countdownDone = () => {
     phaseRendered = 'p1';
-    if (role === 'host') {
+    if (gameRole === 'bomber') {
       showScreen('bomb-p1');
       renderPinPad(data);
     } else {
@@ -1083,7 +1153,7 @@ function renderMathProblem(data) {
 // ===== PHASE 2: WIRES =====
 function enterPhase2(data) {
   phaseRendered = 'p2';
-  if (role === 'host') {
+  if (gameRole === 'bomber') {
     showScreen('bomb-p2');
     renderWirePanel(data);
   } else {
@@ -1320,6 +1390,11 @@ function enterRoundEnd(data) {
   document.getElementById('re-failed').textContent  = failedCnt;
   showScreen('round-end');
 
+  // スワップボタンを表示（最終ラウンドでなければ）
+  const swapBtn = document.getElementById('swap-btn-round');
+  swapBtn.style.display = data.round < TOTAL_ROUNDS ? 'block' : 'none';
+  swapBtn.disabled = false;
+
   if (data.round >= TOTAL_ROUNDS) {
     document.getElementById('re-next').textContent = '最終結果へ...';
     if (role === 'host') {
@@ -1374,6 +1449,106 @@ function flashRed() {
     f.style.transition = 'opacity 0.9s'; f.style.opacity = '0';
     setTimeout(() => { f.style.display = 'none'; f.style.transition = ''; }, 900);
   }, 80);
+}
+
+// ===== ROLE SWAP =====
+function roleName(gr) { return gr === 'bomber' ? '💣 爆弾係' : '📖 マニュアル係'; }
+
+function updateLobbyRoleLabels() {
+  const hl = document.getElementById('host-role-label');
+  const gl = document.getElementById('guest-role-label');
+  if (hl) hl.textContent = storedGameRoles.host === 'bomber' ? '爆弾係' : 'マニュアル係';
+  if (gl) gl.textContent = storedGameRoles.guest === 'bomber' ? '爆弾係' : 'マニュアル係';
+  // ゲスト参加後はスワップボタンを有効化
+  const lb = document.getElementById('swap-btn-lobby');
+  if (lb) lb.disabled = false;
+}
+
+async function requestSwap() {
+  // ラウンド間インターバルならホストのタイマーを停止
+  clearTimeout(roundEndHandle);
+  document.querySelectorAll('#swap-btn-lobby, #swap-btn-round').forEach(b => b.disabled = true);
+  await roomRef.update({ swapReq: { from: role, state: 'pending' } });
+}
+
+async function cancelSwap() {
+  await roomRef.update({ swapReq: null });
+}
+
+async function respondSwap(accept) {
+  if (accept) {
+    const newRoles = {
+      host: storedGameRoles.host === 'bomber' ? 'manual' : 'bomber',
+      guest: storedGameRoles.guest === 'bomber' ? 'manual' : 'bomber',
+    };
+    await roomRef.update({ gameRoles: newRoles, swapReq: { state: 'accepted' } });
+  } else {
+    await roomRef.update({ swapReq: { state: 'declined' } });
+  }
+}
+
+function handleSwapRequest(data) {
+  const req = data.swapReq;
+
+  if (!req || !req.state) {
+    hideSwapOverlay();
+    return;
+  }
+
+  if (req.state === 'pending') {
+    if (req.from === role) {
+      showSwapWaiting();
+    } else {
+      showSwapRequestModal(data, req);
+    }
+    return;
+  }
+
+  // accepted / declined: オーバーレイを消してタイマー再開
+  hideSwapOverlay();
+  if (data.state === 'round-end' && role === 'host') {
+    restartRoundEndTimer(data);
+  }
+  // ロビーでの承認 → start-btn の有効状態は変えない
+}
+
+function showSwapWaiting() {
+  document.getElementById('swap-waiting-view').style.display = 'block';
+  document.getElementById('swap-request-view').style.display = 'none';
+  document.getElementById('swap-overlay').classList.add('active');
+}
+
+function showSwapRequestModal(data, req) {
+  const requester = req.from === 'host' ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
+  const myNew = storedGameRoles[role] === 'bomber' ? 'manual' : 'bomber';
+  document.getElementById('swap-req-title').textContent = `${requester}から役割交代のリクエスト`;
+  document.getElementById('swap-role-preview').innerHTML = `
+    <span class="swap-role-tag ${storedGameRoles[role] === 'bomber' ? 'role-bomber' : 'role-manual'}">${roleName(storedGameRoles[role])}</span>
+    <span style="color:#555;font-size:1.2rem">→</span>
+    <span class="swap-role-tag ${myNew === 'bomber' ? 'role-bomber' : 'role-manual'}">${roleName(myNew)}</span>`;
+  document.getElementById('swap-waiting-view').style.display = 'none';
+  document.getElementById('swap-request-view').style.display = 'block';
+  document.getElementById('swap-overlay').classList.add('active');
+}
+
+function hideSwapOverlay() {
+  document.getElementById('swap-overlay').classList.remove('active');
+  document.querySelectorAll('#swap-btn-lobby, #swap-btn-round').forEach(b => b.disabled = false);
+}
+
+function restartRoundEndTimer(data) {
+  const results = { ...(data.results || {}), [data.round]: data.roundResult };
+  const cleared   = Object.values(results).filter(v => v === 'success').length;
+  const failedCnt = Object.values(results).filter(v => v === 'failed').length;
+  if (data.round >= TOTAL_ROUNDS) {
+    roundEndHandle = setTimeout(() => {
+      roomRef.update({ state: 'match-end', finalResults: results, clearedCount: cleared, failedCount: failedCnt });
+    }, 3000);
+  } else {
+    roundEndHandle = setTimeout(() => {
+      startRound(data.round + 1, results, cleared, failedCnt, data.difficulty || 'hard');
+    }, 3000);
+  }
 }
 
 // ===== BACK TO TITLE =====
