@@ -114,6 +114,77 @@
     .rv-nested-hit .rv-nested-header { color: #7aff7a; }
     .rv-cond-resolved { font-size: 0.72rem; color: #666; margin-left: auto; white-space: nowrap; }
 
+    /* TUNE: FREQUENCY MODULE */
+    .tune-sub { font-size: 0.75rem; color: #5a7088; margin-bottom: 16px; line-height: 1.5; }
+    .tune-freq-display {
+      font-size: 3.2rem; font-weight: 900; letter-spacing: 6px;
+      color: #00ccff; text-shadow: 0 0 24px #00aaff55; text-align: center;
+      margin: 8px 0 2px; font-family: 'Courier New', monospace;
+    }
+    .tune-freq-label {
+      font-size: 0.6rem; letter-spacing: 4px; color: #1a3a5a;
+      text-align: center; margin-bottom: 18px;
+    }
+    /* Custom slider */
+    .tune-slider-wrap { margin-bottom: 22px; }
+    input[type="range"].tune-slider {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 8px;
+      background: linear-gradient(90deg, #070e18 0%, #0e2840 100%);
+      border-radius: 4px; outline: none; border: 1px solid #1a3a5a; cursor: pointer;
+    }
+    input[type="range"].tune-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 32px; height: 32px; border-radius: 50%;
+      background: radial-gradient(circle, #60ddff 0%, #0077cc 100%);
+      border: 2px solid #00aaff; cursor: grab;
+      box-shadow: 0 0 14px #00aaffbb, 0 0 32px #0066ff44;
+      transition: transform 0.1s;
+    }
+    input[type="range"].tune-slider:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.15); }
+    input[type="range"].tune-slider::-moz-range-thumb {
+      width: 32px; height: 32px; border-radius: 50%; border: 2px solid #00aaff;
+      background: radial-gradient(circle, #60ddff 0%, #0077cc 100%);
+      box-shadow: 0 0 14px #00aaffbb; cursor: grab;
+    }
+    /* Keep bar */
+    .tune-keep-wrap { margin-top: 10px; }
+    .tune-keep-label { font-size: 0.6rem; letter-spacing: 4px; color: #1a2a3a; margin-bottom: 6px; }
+    .tune-keep-bg {
+      width: 100%; height: 22px; background: #050510; border: 1px solid #151a28;
+      border-radius: 11px; overflow: hidden; margin-bottom: 6px;
+    }
+    .tune-keep-bar { height: 100%; width: 0%; border-radius: 11px; background: #222; transition: background 0.25s; }
+    .tune-keep-status { font-size: 0.72rem; color: #2a2a4a; text-align: center; letter-spacing: 2px; min-height: 1.3em; }
+    /* Manual: target display */
+    .tune-target-wrap {
+      text-align: center; border: 1px solid #0a1e0a; border-radius: 10px;
+      padding: 12px 8px 10px; background: #06100a; margin-bottom: 16px;
+    }
+    .tune-target-label { font-size: 0.6rem; letter-spacing: 4px; color: #1a4a1a; margin-bottom: 4px; }
+    .tune-target-val {
+      font-size: 3.5rem; font-weight: 900; letter-spacing: 10px; color: #fff;
+      font-family: 'Courier New', monospace; text-shadow: 0 0 20px #ffffff22;
+    }
+    /* Manual: current value + range bar */
+    .tune-current-label { font-size: 0.6rem; letter-spacing: 4px; color: #2a2a4a; margin-bottom: 4px; }
+    .tune-current-val {
+      font-size: 2.2rem; font-weight: 900; letter-spacing: 4px; text-align: center;
+      font-family: 'Courier New', monospace; margin-bottom: 8px;
+      transition: color 0.12s, text-shadow 0.12s; color: #ff4040;
+    }
+    .tune-range-bg {
+      position: relative; height: 28px; background: #07070f;
+      border: 1px solid #141424; border-radius: 4px; overflow: hidden; margin-bottom: 14px;
+    }
+    .tune-range-target-mark {
+      position: absolute; top: 0; bottom: 0; width: 2px; background: #ffffff55;
+      pointer-events: none; z-index: 2;
+    }
+    .tune-range-cursor {
+      position: absolute; top: 3px; bottom: 3px; width: 8px; border-radius: 4px;
+      transform: translateX(-50%); transition: left 0.08s, background 0.12s; z-index: 3;
+    }
+
     /* PANIC MODE (残り15秒以下) */
     @keyframes panicShake {
       0%, 100% { transform: translateX(0) rotate(0deg); }
@@ -776,6 +847,58 @@
   </div>
 </div>
 
+<!-- TUNE: FREQUENCY (BOMBER) -->
+<div id="screen-bomb-tune" class="screen">
+  <div class="bomb-panel" style="position:relative;overflow:hidden">
+    <div class="panel-header">
+      <span class="panel-label">💣 BOMBER</span>
+      <span class="timer" id="timer-bt">--</span>
+      <div id="round-bar-bt"></div>
+    </div>
+    <div class="section-title" style="margin-bottom:10px">📡 FREQ TUNING MODULE</div>
+    <p class="tune-sub">マニュアルの指示に従ってスライダーを動かせ！</p>
+    <div class="tune-freq-display" id="tune-bomber-freq">500</div>
+    <div class="tune-freq-label">— CURRENT FREQUENCY —</div>
+    <div class="tune-slider-wrap">
+      <input type="range" class="tune-slider" id="tune-slider" min="0" max="1000" value="500"
+             oninput="onSliderInput(+this.value)">
+    </div>
+    <div class="tune-keep-wrap">
+      <div class="tune-keep-label">— LOCK PROGRESS —</div>
+      <div class="tune-keep-bg"><div class="tune-keep-bar" id="tune-keep-bar-b"></div></div>
+      <div class="tune-keep-status" id="tune-keep-status-b">周波数を合わせろ！</div>
+    </div>
+  </div>
+</div>
+
+<!-- TUNE: FREQUENCY (MANUAL) -->
+<div id="screen-manual-tune" class="screen">
+  <div class="manual-panel">
+    <div class="panel-header">
+      <span class="panel-label">📖 MANUAL</span>
+      <span class="timer" id="timer-mt">--</span>
+      <div id="round-bar-mt"></div>
+    </div>
+    <div class="section-title" style="margin-bottom:10px">📡 FREQ TUNING MODULE</div>
+    <p class="tune-sub">爆弾係を口頭で誘導して目標周波数に合わせさせろ！</p>
+    <div class="tune-target-wrap">
+      <div class="tune-target-label">— TARGET FREQUENCY —</div>
+      <div class="tune-target-val" id="tune-target-val">---</div>
+    </div>
+    <div class="tune-current-label">— BOMBER'S CURRENT FREQ —</div>
+    <div class="tune-current-val" id="tune-current-val">---</div>
+    <div class="tune-range-bg" id="tune-range-bg">
+      <div class="tune-range-target-mark" id="tune-range-target-mark"></div>
+      <div class="tune-range-cursor" id="tune-range-cursor"></div>
+    </div>
+    <div class="tune-keep-wrap">
+      <div class="tune-keep-label">— LOCK PROGRESS —</div>
+      <div class="tune-keep-bg"><div class="tune-keep-bar" id="tune-keep-bar-m"></div></div>
+      <div class="tune-keep-status" id="tune-keep-status-m">誘導中…</div>
+    </div>
+  </div>
+</div>
+
 <!-- PHASE 3: SYMBOL (BOMBER) -->
 <div id="screen-bomb-p3" class="screen">
   <div class="bomb-panel" style="position:relative;overflow:hidden">
@@ -913,9 +1036,9 @@ const WIRES = [
   { id:'white',  name:'白',  color:'#c8c8c8', glow:'#c8c8c844' },
 ];
 const DIFFICULTY_SETTINGS = {
-  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], decoyCounts: [0, 0, 1], mathLevel: 'easy',   label: 'かんたん',   badgeClass: 'diff-badge-easy',   hasPhase3: false, p3Duration: 0  },
-  normal: { durations: [100,  80, 60], wireCounts: [4, 4, 5], decoyCounts: [0, 1, 1], mathLevel: 'normal', label: 'ふつう',     badgeClass: 'diff-badge-normal', hasPhase3: true,  p3Duration: 60 },
-  hard:   { durations: [135, 105, 80], wireCounts: [4, 4, 5], decoyCounts: [1, 2, 2], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard',   hasPhase3: true,  p3Duration: 45 },
+  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], decoyCounts: [0, 0, 1], mathLevel: 'easy',   label: 'かんたん',   badgeClass: 'diff-badge-easy',   hasPhase3: false, p3Duration: 0,  hasTune: false, tuneTolerance: 10, tuneKeepMs: 2000 },
+  normal: { durations: [100,  80, 60], wireCounts: [4, 4, 5], decoyCounts: [0, 1, 1], mathLevel: 'normal', label: 'ふつう',     badgeClass: 'diff-badge-normal', hasPhase3: true,  p3Duration: 60, hasTune: true,  tuneTolerance: 6,  tuneKeepMs: 2500 },
+  hard:   { durations: [135, 105, 80], wireCounts: [4, 4, 5], decoyCounts: [1, 2, 2], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard',   hasPhase3: true,  p3Duration: 45, hasTune: true,  tuneTolerance: 3,  tuneKeepMs: 3000 },
 };
 const TOTAL_ROUNDS = 3;
 
@@ -946,6 +1069,10 @@ let blackoutHandle = null, blackoutEndHandle = null;
 let timerStarted = false, phaseRendered = null;
 let penaltyMs = 0, bonusMs = 0;
 let isPanicMode = false;
+// tune module
+let tuneProgressHandle = null, tuneSlideThrottle = null;
+let tuneLocalKeepStart = null, tuneLocalIsKeeping = false;
+let tuneSavedTarget = 500, tuneSavedTolerance = 6, tuneSavedKeepMs = 2500;
 let lastDataStr = '';
 let selectedDifficulty = 'hard';
 let storedHostName = 'ホスト', storedGuestName = 'ゲスト';
@@ -1375,9 +1502,12 @@ async function startRound(round, results, cleared, failed, diff) {
     swapReq:        null,
     playAgain: { host: false, guest: false },
     finalArm:  null,
-    blackout:   { active: false, light: false },
-    penaltyMs:  0,
-    bonusMs:    0,
+    blackout:     { active: false, light: false },
+    penaltyMs:    0,
+    bonusMs:      0,
+    tuneTarget:   generateTuneTarget(),
+    tuneValue:    500,
+    tuneKeepStart: null,
     p3GroupIdx: p3.p3GroupIdx,
     p3Symbols:  p3.p3Symbols,
     p3Correct:  p3.p3Correct,
@@ -1424,9 +1554,26 @@ function handleStateChange(data) {
   }
 
   // ペナルティ／ボーナス：タイマーに即時反映（キー重複チェックより前）
-  if (['phase1', 'phase2', 'phase3'].includes(data.state)) {
+  if (['phase1', 'tune', 'phase2', 'phase3'].includes(data.state)) {
     penaltyMs = data.penaltyMs || 0;
     bonusMs   = data.bonusMs   || 0;
+  }
+
+  // tune: スライダー値とkeepStartをリアルタイム更新（キー重複チェックより前）
+  if (data.state === 'tune' && phaseRendered === 'tune') {
+    const nowKeeping = !!data.tuneKeepStart;
+    tuneLocalKeepStart = data.tuneKeepStart || null;
+    if (gameRole === 'manual') {
+      updateTuneManualLive(data.tuneValue || 500);
+      if (nowKeeping && !tuneLocalIsKeeping) {
+        tuneLocalIsKeeping = true;
+        startTuneProgress();
+      } else if (!nowKeeping && tuneLocalIsKeeping) {
+        tuneLocalIsKeeping = false;
+        clearInterval(tuneProgressHandle);
+        updateTuneProgressUI(0);
+      }
+    }
   }
 
   // Play again handler (match-end screen)
@@ -1453,12 +1600,14 @@ function handleStateChange(data) {
   const fa    = data.finalArm || {};
   const faFp  = (fa.hostTs ? 'H' : '') + (fa.guestTs ? 'G' : '');
   const p3Fp  = (data.p3Pressed || []).join('-');
-  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',') + '_' + faFp + '_' + p3Fp;
+  const tuneK = data.state === 'tune' ? (data.tuneKeepStart ? 'K' : 'N') : '';
+  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',') + '_' + faFp + '_' + p3Fp + '_' + tuneK;
   if (key === lastDataStr) return;
   lastDataStr = key;
 
   switch (data.state) {
     case 'phase1':     enterPhase1(data);    break;
+    case 'tune':       enterTune(data);      break;
     case 'phase2':     enterPhase2(data);    break;
     case 'phase3':     enterPhase3(data);    break;
     case 'final-arm':  enterFinalArm(data);  break;
@@ -1560,7 +1709,14 @@ async function enterDigit(digit, data) {
   }
   // All digits entered — validate
   if (entry === data.mathAnswer) {
-    await roomRef.update({ pinEntry: entry, state: 'phase2', ...bonusUpdate(data) });
+    const ds = DIFFICULTY_SETTINGS[data.difficulty || 'hard'];
+    const bonus = bonusUpdate(data);
+    if (ds.hasTune) {
+      const tuneStartTime = Date.now() + 4000;
+      await roomRef.update({ pinEntry: entry, state: 'tune', tuneStartTime, ...bonus });
+    } else {
+      await roomRef.update({ pinEntry: entry, state: 'phase2', ...bonus });
+    }
   } else {
     // Wrong answer — apply -5s time penalty
     document.querySelectorAll('.pin-digit').forEach(el => el.classList.add('wrong'));
@@ -2020,6 +2176,7 @@ function enterFinalArm(data) {
   if (role === 'host') roomRef.child('blackout').update({ active: false, light: false });
   stopBGM();
   exitPanicMode();
+  cleanupTune();
   timerStarted = false;
   showScreen('final-arm');
 
@@ -2109,6 +2266,169 @@ async function pressFinalArmBtn() {
   await roomRef.child('finalArm').update({
     [role + 'Ts']: firebase.database.ServerValue.TIMESTAMP,
   });
+}
+
+// ===== TUNE: FREQUENCY MODULE =====
+function generateTuneTarget() {
+  // 端を避けて100-900の範囲でランダム生成
+  return Math.floor(Math.random() * 801) + 100;
+}
+
+function cleanupTune() {
+  clearInterval(tuneProgressHandle);
+  clearTimeout(tuneSlideThrottle);
+  tuneProgressHandle = null;
+  tuneSlideThrottle  = null;
+  tuneLocalKeepStart = null;
+  tuneLocalIsKeeping = false;
+}
+
+function enterTune(data) {
+  const isFirstEnter = phaseRendered !== 'tune';
+  phaseRendered = 'tune';
+  if (!isFirstEnter) return;
+
+  clearTimeout(timerHandle); clearTimeout(blackoutHandle); clearTimeout(blackoutEndHandle);
+  stopBGM(); exitPanicMode(); cleanupTune(); timerStarted = false;
+  if (role === 'host') roomRef.child('blackout').update({ active: false, light: false });
+
+  const ds = DIFFICULTY_SETTINGS[data.difficulty || 'hard'];
+  tuneSavedTarget    = data.tuneTarget    || 500;
+  tuneSavedTolerance = ds.tuneTolerance;
+  tuneSavedKeepMs    = ds.tuneKeepMs;
+  tuneLocalKeepStart = data.tuneKeepStart || null;
+
+  const launch = () => {
+    if (gameRole === 'bomber') {
+      showScreen('bomb-tune');
+      renderTuneBomber(data);
+    } else {
+      showScreen('manual-tune');
+      renderTuneManual(data);
+    }
+    startTimer(data.startTime, data.duration);
+    startBGM(550);
+  };
+
+  if (document.getElementById('countdown-overlay').classList.contains('show')) launch();
+  else runCountdown(data.tuneStartTime, `ROUND ${data.round} — FREQ MODULE`, launch);
+}
+
+function renderTuneBomber(data) {
+  renderRoundBar('round-bar-bt', data.round, data.results, data.difficulty);
+  const slider = document.getElementById('tune-slider');
+  if (slider) slider.value = data.tuneValue || 500;
+  document.getElementById('tune-bomber-freq').textContent = data.tuneValue || 500;
+  updateTuneProgressUI(0);
+}
+
+function renderTuneManual(data) {
+  renderRoundBar('round-bar-mt', data.round, data.results, data.difficulty);
+  document.getElementById('tune-target-val').textContent = tuneSavedTarget;
+  // ターゲット位置マーカー
+  const mark = document.getElementById('tune-range-target-mark');
+  if (mark) mark.style.left = (tuneSavedTarget / 1000 * 100) + '%';
+  updateTuneManualLive(data.tuneValue || 500);
+  updateTuneProgressUI(0);
+}
+
+function updateTuneManualLive(val) {
+  const dist = Math.abs(val - tuneSavedTarget);
+  // 0=red(0deg) 120=green、最大距離500を基準に色計算
+  const closeness = Math.max(0, 1 - dist / 500);
+  const hue = Math.round(closeness * 120);
+  const color = `hsl(${hue}, 90%, 60%)`;
+
+  const valEl = document.getElementById('tune-current-val');
+  if (valEl) {
+    valEl.textContent = val;
+    valEl.style.color = color;
+    valEl.style.textShadow = `0 0 14px ${color}66`;
+  }
+  const cursor = document.getElementById('tune-range-cursor');
+  if (cursor) {
+    cursor.style.left = (val / 1000 * 100) + '%';
+    cursor.style.background = color;
+    cursor.style.boxShadow = `0 0 8px ${color}88`;
+  }
+}
+
+function updateTuneProgressUI(pct) {
+  const barB = document.getElementById('tune-keep-bar-b');
+  const barM = document.getElementById('tune-keep-bar-m');
+  const stB  = document.getElementById('tune-keep-status-b');
+  const stM  = document.getElementById('tune-keep-status-m');
+  const color = pct < 40 ? '#ff6622' : pct < 75 ? '#aaee00' : '#00ff88';
+  const shadow = pct > 0 ? `0 0 10px ${color}88` : 'none';
+  [barB, barM].forEach(el => {
+    if (!el) return;
+    el.style.width = pct + '%';
+    el.style.background = pct > 0 ? color : '#1a1a2a';
+    el.style.boxShadow = shadow;
+  });
+  if (pct <= 0) {
+    if (stB) stB.textContent = '周波数を合わせろ！';
+    if (stM) stM.textContent = '誘導中…';
+  } else if (pct < 100) {
+    const msg = `LOCK ${Math.round(pct)}% — 動かすな！`;
+    if (stB) stB.textContent = msg;
+    if (stM) stM.textContent = msg;
+  } else {
+    if (stB) stB.textContent = '✅ ロック完了！';
+    if (stM) stM.textContent = '✅ ロック完了！';
+  }
+}
+
+function startTuneProgress() {
+  clearInterval(tuneProgressHandle);
+  tuneProgressHandle = setInterval(() => {
+    if (!tuneLocalKeepStart) {
+      clearInterval(tuneProgressHandle);
+      updateTuneProgressUI(0);
+      return;
+    }
+    const pct = Math.min(100, (Date.now() - tuneLocalKeepStart) / tuneSavedKeepMs * 100);
+    updateTuneProgressUI(pct);
+    if (pct >= 100 && role === 'host') {
+      clearInterval(tuneProgressHandle);
+      playSuccess();
+      roomRef.update({ state: 'phase2' });
+    }
+  }, 50);
+}
+
+function onSliderInput(val) {
+  val = Math.round(val);
+  document.getElementById('tune-bomber-freq').textContent = val;
+
+  const inRange = Math.abs(val - tuneSavedTarget) <= tuneSavedTolerance;
+
+  if (inRange && !tuneLocalIsKeeping) {
+    // 範囲内に入った → keepStart開始
+    tuneLocalIsKeeping = true;
+    tuneLocalKeepStart = Date.now();
+    clearTimeout(tuneSlideThrottle); tuneSlideThrottle = null;
+    roomRef.update({ tuneValue: val, tuneKeepStart: tuneLocalKeepStart });
+    startTuneProgress();
+    return;
+  }
+  if (!inRange && tuneLocalIsKeeping) {
+    // 範囲外に出た → keepStartリセット
+    tuneLocalIsKeeping = false;
+    tuneLocalKeepStart = null;
+    clearInterval(tuneProgressHandle);
+    updateTuneProgressUI(0);
+    clearTimeout(tuneSlideThrottle); tuneSlideThrottle = null;
+    roomRef.update({ tuneValue: val, tuneKeepStart: null });
+    return;
+  }
+  // 通常スライド → スロットル送信
+  if (!tuneSlideThrottle) {
+    tuneSlideThrottle = setTimeout(() => {
+      tuneSlideThrottle = null;
+      roomRef.update({ tuneValue: val });
+    }, 50);
+  }
 }
 
 // ===== PANIC MODE =====
@@ -2220,7 +2540,7 @@ function flashTimerPenalty() {
 function startTimer(startTime, duration) {
   if (timerStarted) return;
   timerStarted = true;
-  const ids = ['timer-bp1', 'timer-bp2', 'timer-bp3', 'timer-mp1', 'timer-mp2', 'timer-mp3'];
+  const ids = ['timer-bp1', 'timer-bp2', 'timer-bp3', 'timer-bt', 'timer-mp1', 'timer-mp2', 'timer-mp3', 'timer-mt'];
   const tick = () => {
     const remaining = Math.max(0, duration - (Date.now() - startTime) / 1000 - penaltyMs / 1000 + bonusMs / 1000);
     const disp = Math.ceil(remaining).toString().padStart(2, '0');
@@ -2261,6 +2581,7 @@ function enterReview(data) {
   clearTimeout(blackoutEndHandle);
   stopBGM();
   exitPanicMode();
+  cleanupTune();
   timerStarted = false;
   phaseRendered = null;
   if (data.failReason === 'timeout') { playExplosion(); flashRed(); }
