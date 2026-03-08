@@ -88,6 +88,15 @@
     .diff-badge-normal { background: #1a1600; color: #ffe060; border: 1px solid #a08800; }
     .diff-badge-hard   { background: #1a0a0a; color: #ff6060; border: 1px solid #c42020; }
 
+    /* CONDITIONAL WIRE MANUAL */
+    .wire-count-hint { font-size: 0.8rem; color: #4a9a4a; margin: 2px 0 8px; letter-spacing: 1px; }
+    .cond-block { background: #080e08; border-radius: 8px; padding: 8px 10px; margin-top: 4px; }
+    .cond-question { font-size: 0.82rem; color: #c8b84a; margin-bottom: 8px; font-weight: bold; }
+    .cond-branch { display: flex; align-items: flex-start; gap: 8px; padding: 6px 4px; border-top: 1px solid #1a2a1a; font-size: 0.9rem; }
+    .cond-yn { font-size: 0.7rem; font-weight: bold; padding: 2px 7px; border-radius: 3px; flex-shrink: 0; margin-top: 3px; letter-spacing: 1px; }
+    .cond-branch-yes .cond-yn { background: #163016; color: #6aee6a; border: 1px solid #2a6a2a; }
+    .cond-branch-no  .cond-yn { background: #301616; color: #ee6a6a; border: 1px solid #6a2a2a; }
+
     /* ROUND INDICATOR */
     .round-bar {
       display: flex; align-items: center; justify-content: center;
@@ -698,26 +707,78 @@ function generateWireOrder(count) {
 }
 
 function generateStroopWires(count) {
-  const ids = WIRES.map(w => w.id);
-  // 見た目の色をランダムに選ぶ（重複あり）
-  const visuals = Array.from({length: count}, () => ids[Math.floor(Math.random() * ids.length)]);
-  // テキストは見た目と必ず違う色にする
-  const texts = visuals.map(vId => {
-    const others = ids.filter(id => id !== vId);
-    return others[Math.floor(Math.random() * others.length)];
-  });
+  const ids = WIRES.map(w => w.id); // 7色
+  // 見た目：重複なし（シャッフル後スライス）
+  const visuals = shuffle([...ids]).slice(0, count);
+  // ラベル：見た目と全て異なる完全な変形（derangement的）
+  let texts;
+  let tries = 0;
+  do {
+    texts = shuffle([...ids]).slice(0, count);
+    tries++;
+  } while (texts.some((t, i) => t === visuals[i]) && tries < 200);
+  // フォールバック: 1つずらし
+  if (texts.some((t, i) => t === visuals[i])) {
+    texts = [...visuals.slice(1), visuals[0]];
+  }
   return { wireVisuals: visuals, wireTexts: texts };
 }
 
-function generateStroopRule(wireVisuals, wireTexts) {
+function generateConditionalRule(wireVisuals, wireTexts) {
   const count = wireVisuals.length;
   const sequence = shuffle(Array.from({length: count}, (_, i) => i));
-  // 各ステップでランダムに「テキスト基準」か「見た目基準」を選ぶ
-  const steps = sequence.map(idx => {
-    const criterion = Math.random() < 0.5 ? 'text' : 'visual';
-    const targetId  = criterion === 'text' ? wireTexts[idx] : wireVisuals[idx];
-    return { idx, criterion, targetId };
+
+  const steps = sequence.map((correctIdx) => {
+    // 条件が TRUE か FALSE に解決するかを決める（~50/50）
+    const condTrue = Math.random() < 0.5;
+
+    // 条件の種類をランダムに選ぶ
+    const condType = Math.floor(Math.random() * 3);
+    let condition;
+    if (condType === 0) {
+      // ワイヤーが N本以上
+      const N = condTrue
+        ? Math.max(1, count - Math.floor(Math.random() * 2))   // N <= count → TRUE
+        : count + 1 + Math.floor(Math.random() * 2);            // N > count  → FALSE
+      condition = { type: 'gte', value: N };
+    } else if (condType === 1) {
+      // ワイヤーが N本以下
+      const N = condTrue
+        ? count + Math.floor(Math.random() * 2)                 // N >= count → TRUE
+        : Math.max(1, count - 1 - Math.floor(Math.random() * 1)); // N < count → FALSE
+      condition = { type: 'lte', value: N };
+    } else {
+      // 本数の偶奇
+      const actualParity = count % 2 === 1 ? 'odd' : 'even';
+      condition = { type: 'parity', value: condTrue ? actualParity : (actualParity === 'odd' ? 'even' : 'odd') };
+    }
+
+    // 正しい枝：correctIdx のワイヤーを指す
+    const correctCrit = Math.random() < 0.5 ? 'text' : 'visual';
+    const correctTargetId = correctCrit === 'text' ? wireTexts[correctIdx] : wireVisuals[correctIdx];
+    const correctBranch = { criterion: correctCrit, targetId: correctTargetId };
+
+    // 誤った枝：別のワイヤーを指す
+    const wrongIndices = Array.from({length: count}, (_, i) => i).filter(i => i !== correctIdx);
+    let wrongBranch;
+    if (wrongIndices.length > 0) {
+      const wrongIdx = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
+      const wrongCrit = Math.random() < 0.5 ? 'text' : 'visual';
+      wrongBranch = { criterion: wrongCrit, targetId: wrongCrit === 'text' ? wireTexts[wrongIdx] : wireVisuals[wrongIdx] };
+    } else {
+      // ワイヤーが1本のみ（退化ケース）: 別の基準で同じワイヤーを指す
+      const wrongCrit = correctCrit === 'text' ? 'visual' : 'text';
+      wrongBranch = { criterion: wrongCrit, targetId: wrongCrit === 'text' ? wireTexts[correctIdx] : wireVisuals[correctIdx] };
+    }
+
+    return {
+      idx: correctIdx,
+      condition,
+      ifTrue:  condTrue ? correctBranch : wrongBranch,
+      ifFalse: condTrue ? wrongBranch   : correctBranch,
+    };
   });
+
   return { sequence, steps };
 }
 
@@ -754,7 +815,7 @@ async function startRound(round, results, cleared, failed, diff) {
   const wireCount = d.wireCounts[round - 1];
   const duration  = d.durations[round - 1];
   const stroop    = generateStroopWires(wireCount);
-  const stroopRule = generateStroopRule(stroop.wireVisuals, stroop.wireTexts);
+  const stroopRule = generateConditionalRule(stroop.wireVisuals, stroop.wireTexts);
   const math = generateMathProblem(d.mathLevel);
   const startTime = Date.now() + 5000;
 
@@ -1020,32 +1081,57 @@ function renderWireManual(data) {
   renderRoundBar('round-bar-mp2', data.round, data.results, data.difficulty);
 
   const steps = data.wireSteps || [];
+  const totalWires = data.wireVisuals.length;
 
-  // 各ステップの指示文を生成
-  const stepDesc = (step) => {
-    const w = wireById(step.targetId);
-    if (step.criterion === 'text') {
+  // 条件テキスト生成
+  function condLabel(cond) {
+    if (!cond) return '';
+    if (cond.type === 'gte')    return `ワイヤーが <strong>${cond.value}本以上</strong>`;
+    if (cond.type === 'lte')    return `ワイヤーが <strong>${cond.value}本以下</strong>`;
+    if (cond.type === 'parity') return `ワイヤーの本数が <strong>${cond.value === 'odd' ? '奇数' : '偶数'}</strong>`;
+    return '';
+  }
+
+  // 枝の指示文生成
+  function branchDesc(branch) {
+    const w = wireById(branch.targetId);
+    if (branch.criterion === 'text') {
       return `ラベルに <strong style="color:${w.color};text-shadow:0 0 6px ${w.color}88">&nbsp;${w.name}&nbsp;</strong> と書かれたワイヤー`;
     } else {
       return `見た目が <strong style="color:${w.color};text-shadow:0 0 6px ${w.color}88">${w.name}色</strong> のワイヤー`;
     }
-  };
+  }
 
-  // 現在切るべきステップ
+  // 現在のステップ指示ボックス
   const currentStep = cuts.length < steps.length ? steps[cuts.length] : null;
-
-  // 現在の指示ボックス（マニュアル係が読み上げる用）
-  const currentBox = currentStep
-    ? `<div class="step-block" style="border-color:#3a7a3a;box-shadow:0 0 14px #00ff0022;margin-bottom:10px">
+  let currentBox;
+  if (currentStep) {
+    const cond = currentStep.condition;
+    currentBox = `
+      <div class="step-block" style="border-color:#3a7a3a;box-shadow:0 0 14px #00ff0022;margin-bottom:10px">
         <div class="step-header">
           <div class="step-num" style="background:#1e7a1e;color:#afffaf">▶</div>
           <div class="step-label" style="color:#6aee6a">今ホストに伝えること（${cuts.length + 1}本目）</div>
         </div>
-        <div style="font-size:1rem;line-height:1.7;padding:2px 0">${stepDesc(currentStep)}</div>
-       </div>`
-    : `<div class="step-block" style="border-color:#3a7a3a;text-align:center;padding:14px">
+        <div class="wire-count-hint">全 ${totalWires} 本</div>
+        <div class="cond-block">
+          <div class="cond-question">❓ ${condLabel(cond)} か？</div>
+          <div class="cond-branch cond-branch-yes">
+            <span class="cond-yn">YES</span>
+            <span>${branchDesc(currentStep.ifTrue)}</span>
+          </div>
+          <div class="cond-branch cond-branch-no">
+            <span class="cond-yn">NO</span>
+            <span>${branchDesc(currentStep.ifFalse)}</span>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    currentBox = `
+      <div class="step-block" style="border-color:#3a7a3a;text-align:center;padding:14px">
         <span style="color:#5aff5a;font-size:1.1rem">全ワイヤー切断完了！</span>
-       </div>`;
+      </div>`;
+  }
 
   // 進捗リスト（完了分は開示、未来分は隠す）
   const progressRows = steps.map((step, i) => {
@@ -1053,7 +1139,6 @@ function renderWireManual(data) {
     const current = i === cuts.length;
 
     if (done) {
-      // 実際に切ったワイヤーの情報を開示
       const cutIdx = data.wireSequence[i];
       const visual = wireById(data.wireVisuals[cutIdx]);
       const text   = wireById(data.wireTexts[cutIdx]);
@@ -1067,7 +1152,6 @@ function renderWireManual(data) {
       </div>`;
     }
 
-    // 現在 or 未来は隠す
     return `<div class="step-prog-item ${current ? 'current' : ''}">
       <span class="step-prog-num">${i + 1}</span>
       <span class="step-prog-name" style="color:#2a3a2a;font-size:0.85rem">???</span>
@@ -1082,8 +1166,7 @@ function renderWireManual(data) {
         <div class="step-label">ストループ解除 — 色と文字が一致しない！</div>
       </div>
       <div class="step-question" style="font-size:0.78rem;color:#7aff7a">
-        「ラベル」= ワイヤーに書かれた文字の色<br>
-        「見た目」= ワイヤー自体の色
+        「ラベル」= ワイヤーに書かれた文字の色　「見た目」= ワイヤー自体の色
       </div>
     </div>
     ${currentBox}
@@ -1093,8 +1176,7 @@ function renderWireManual(data) {
         <div class="step-label">切断記録（${cuts.length}／${steps.length} 完了）</div>
       </div>
       <div class="step-progress">${progressRows}</div>
-    </div>
-  `;
+    </div>`;
 
   document.getElementById('sequence-display').innerHTML = '';
 }
