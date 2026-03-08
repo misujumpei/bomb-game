@@ -118,7 +118,13 @@
       background: #0a0a10; border-radius: 8px; font-size: 0.78rem;
     }
     .player-tag { display: flex; align-items: center; gap: 5px; color: #444; }
-    .player-tag .pname { color: #888; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .player-tag .pname { color: #888; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .thinking-badge {
+      display: inline-block; color: #ff9944; font-size: 0.65rem; font-style: italic;
+      margin-left: 3px; letter-spacing: 0.5px;
+      animation: thinking-blink 0.7s ease-in-out infinite;
+    }
+    @keyframes thinking-blink { 0%,100%{opacity:1} 50%{opacity:0.1} }
 
     /* TIMER */
     .timer {
@@ -563,6 +569,9 @@ let timerHandle, roundEndHandle;
 let timerStarted = false, phaseRendered = null;
 let lastDataStr = '';
 let selectedDifficulty = 'hard';
+let storedHostName = 'ホスト', storedGuestName = 'ゲスト';
+let storedThinking = { host: false, guest: false };
+let idleTimer = null, isThinkingState = false;
 
 // ===== UTILS =====
 function shuffle(arr) {
@@ -645,6 +654,52 @@ function renderRoundBar(elId, round, results, difficulty) {
       else if (r === round) cls = 'current';
       return `<div class="round-dot ${cls}" title="Round ${r}"></div>`;
     }).join('') + badge;
+}
+
+// ===== THINKING BADGES =====
+function updateThinkingBadges() {
+  const hb = storedThinking.host  ? ' <span class="thinking-badge">考え中…</span>' : '';
+  const gb = storedThinking.guest ? ' <span class="thinking-badge">考え中…</span>' : '';
+  ['bp1-host','bp2-host','mp1-host','mp2-host'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.innerHTML = storedHostName  + hb;
+  });
+  ['bp1-guest','bp2-guest','mp1-guest','mp2-guest'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.innerHTML = storedGuestName + gb;
+  });
+}
+
+// ===== IDLE MONITOR =====
+const IDLE_MS = 5000;
+function resetIdle() {
+  if (isThinkingState) {
+    isThinkingState = false;
+    if (roomRef) roomRef.child('thinking').update({ [role]: false });
+  }
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    isThinkingState = true;
+    if (roomRef) roomRef.child('thinking').update({ [role]: true });
+  }, IDLE_MS);
+}
+function startIdleMonitor() {
+  ['mousemove','mousedown','touchstart','touchmove','keydown','click','scroll'].forEach(e =>
+    document.addEventListener(e, resetIdle, { passive: true })
+  );
+  resetIdle();
+}
+function stopIdleMonitor() {
+  clearTimeout(idleTimer);
+  isThinkingState = false;
+  ['mousemove','mousedown','touchstart','touchmove','keydown','click','scroll'].forEach(e =>
+    document.removeEventListener(e, resetIdle)
+  );
+  if (roomRef) roomRef.child('thinking').update({ [role]: false });
+}
+function setupThinkingListener() {
+  roomRef.child('thinking').on('value', snap => {
+    storedThinking = snap.val() || { host: false, guest: false };
+    updateThinkingBadges();
+  });
 }
 
 // ===== DIFFICULTY =====
@@ -801,6 +856,8 @@ async function becomeHost() {
   document.getElementById('room-code-display').textContent = roomId;
   document.getElementById('host-name-disp').textContent = myName;
   showScreen('host-wait');
+  setupThinkingListener();
+  startIdleMonitor();
   roomRef.on('value', snap => {
     const d = snap.val();
     if (!d) return;
@@ -868,6 +925,8 @@ async function joinRoom() {
   await roomRef.update({ guestReady: true, guestName: myName });
   document.getElementById('guest-name-disp').textContent = myName;
   showScreen('guest-wait');
+  setupThinkingListener();
+  startIdleMonitor();
   roomRef.on('value', snap => { const d = snap.val(); if (d) handleStateChange(d); });
 }
 
@@ -945,9 +1004,8 @@ function enterPhase1(data) {
 }
 
 function renderPinPad(data) {
-  ['bp1-host','bp1-guest'].forEach((id, i) => {
-    document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
-  });
+  storedHostName = data.hostName || 'ホスト'; storedGuestName = data.guestName || 'ゲスト';
+  updateThinkingBadges();
   renderRoundBar('round-bar-bp1', data.round, data.results, data.difficulty);
 
   const entry  = data.pinEntry || '';
@@ -1007,9 +1065,8 @@ async function deleteDigit(data) {
 }
 
 function renderMathProblem(data) {
-  ['mp1-host','mp1-guest'].forEach((id, i) => {
-    document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
-  });
+  storedHostName = data.hostName || 'ホスト'; storedGuestName = data.guestName || 'ゲスト';
+  updateThinkingBadges();
   renderRoundBar('round-bar-mp1', data.round, data.results, data.difficulty);
 
   document.getElementById('math-expr').textContent = data.mathExpr;
@@ -1037,9 +1094,8 @@ function enterPhase2(data) {
 
 function renderWirePanel(data) {
   const cuts = data.wireCuts || [];
-  ['bp2-host','bp2-guest'].forEach((id, i) => {
-    document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
-  });
+  storedHostName = data.hostName || 'ホスト'; storedGuestName = data.guestName || 'ゲスト';
+  updateThinkingBadges();
   renderRoundBar('round-bar-bp2', data.round, data.results, data.difficulty);
   document.getElementById('wire-progress').textContent = `${cuts.length} / ${data.wireSequence.length} 切断済み`;
 
@@ -1096,9 +1152,8 @@ async function cutWire(idx, data) {
 
 function renderWireManual(data) {
   const cuts = data.wireCuts || [];
-  ['mp2-host','mp2-guest'].forEach((id, i) => {
-    document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
-  });
+  storedHostName = data.hostName || 'ホスト'; storedGuestName = data.guestName || 'ゲスト';
+  updateThinkingBadges();
   renderRoundBar('round-bar-mp2', data.round, data.results, data.difficulty);
 
   const steps = data.wireSteps || [];
@@ -1323,11 +1378,13 @@ function flashRed() {
 
 // ===== BACK TO TITLE =====
 function backToTitle() {
+  stopIdleMonitor();
   if (roomRef) { roomRef.off(); roomRef = null; }
   clearTimeout(timerHandle);
   clearTimeout(roundEndHandle);
   stopBGM();
   timerStarted = false; phaseRendered = null; lastDataStr = '';
+  storedThinking = { host: false, guest: false };
   document.getElementById('room-input').value = '';
   document.getElementById('play-again-notify').style.display = 'none';
   showScreen('title');
