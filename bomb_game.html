@@ -182,7 +182,9 @@
       background: repeating-linear-gradient(90deg, var(--wc) 0 44%, #111116 44% 56%, var(--wc) 56% 100%);
       box-shadow: none;
     }
-    .wire-scissors { font-size: 1.1rem; color: #555; transition: color 0.12s; }
+    .wire-name { font-size: 0.72rem; color: #888; min-width: 72px; text-align: right; }
+    .wire-item.cut .wire-name { color: #444; }
+    .wire-scissors { font-size: 1.1rem; color: #555; transition: color 0.12s; margin-left: 4px; }
     .wire-item:not(.cut):hover .wire-scissors { color: #aaa; }
     .wire-item.cut .wire-scissors { color: #333; }
     .bomb-hint { text-align: center; color: #3a3a44; font-size: 0.72rem; }
@@ -460,11 +462,18 @@ const db = firebase.database();
 
 // ===== CONSTANTS =====
 const WIRES = [
-  { id: 'red',    name: '赤',  color: '#e03030', glow: '#e0303066' },
-  { id: 'blue',   name: '青',  color: '#3070e8', glow: '#3070e866' },
-  { id: 'yellow', name: '黄',  color: '#d4b800', glow: '#d4b80066' },
-  { id: 'green',  name: '緑',  color: '#28b028', glow: '#28b02866' },
-  { id: 'white',  name: '白',  color: '#cccccc', glow: '#cccccc44' },
+  { id:'crimson',  name:'朱色',           color:'#C0392B', glow:'#C0392B55', lum:0.25, groups:['red','warm','dark'] },
+  { id:'coral',    name:'コーラル',       color:'#E8845A', glow:'#E8845A55', lum:0.60, groups:['red','orange','warm','bright'] },
+  { id:'wine',     name:'ワインレッド',   color:'#7D2340', glow:'#7D234055', lum:0.18, groups:['red','purple','dark'] },
+  { id:'magenta',  name:'マゼンタ',       color:'#C0187A', glow:'#C0187A55', lum:0.35, groups:['red','purple','bright'] },
+  { id:'lavender', name:'ラベンダー',     color:'#9B7FD4', glow:'#9B7FD455', lum:0.58, groups:['purple','cool','bright'] },
+  { id:'indigo',   name:'インディゴ',     color:'#4A3090', glow:'#4A309055', lum:0.20, groups:['purple','blue','dark'] },
+  { id:'navy',     name:'ネイビー',       color:'#1A2C6B', glow:'#1A2C6B55', lum:0.10, groups:['blue','cool','dark'] },
+  { id:'teal',     name:'ティール',       color:'#1A8A80', glow:'#1A8A8055', lum:0.45, groups:['blue','green','cool'] },
+  { id:'cyan',     name:'シアン',         color:'#00B4CC', glow:'#00B4CC55', lum:0.70, groups:['blue','green','cool','bright'] },
+  { id:'emerald',  name:'エメラルド',     color:'#2E8B57', glow:'#2E8B5755', lum:0.50, groups:['green','cool'] },
+  { id:'sage',     name:'セージグリーン', color:'#7B9E6B', glow:'#7B9E6B55', lum:0.60, groups:['green','warm'] },
+  { id:'amber',    name:'アンバー',       color:'#D4860C', glow:'#D4860C55', lum:0.52, groups:['yellow','orange','warm','bright'] },
 ];
 const ROUND_DURATIONS   = [80, 60, 45];
 const ROUND_WIRE_COUNTS = [5, 6, 7];
@@ -588,23 +597,65 @@ function generateWireOrder(count) {
   return shuffle(order.slice(0, count));
 }
 
-function generateRule(wireOrder, baseSeq) {
-  const checkWire = WIRES[Math.floor(Math.random() * WIRES.length)];
-  const count = wireOrder.filter(id => id === checkWire.id).length;
-  const threshold = 2;
-  const isTrue = count >= threshold;
+const RULE_TEMPLATES = [
+  {
+    queryLabel: '「赤やオレンジっぽい色が何本あるか」とホストに聞け',
+    group: 'warm', type: 'count_threshold', threshold: 2,
+    trueLabel:  '2本以上なら → 切断順を逆にしろ',
+    falseLabel: '2本未満なら → そのまま切れ',
+  },
+  {
+    queryLabel: '「海や空を連想させる色が何本あるか」とホストに聞け',
+    group: 'cool', type: 'count_threshold', threshold: 2,
+    trueLabel:  '2本以上なら → 切断順を逆にしろ',
+    falseLabel: '2本未満なら → そのまま切れ',
+  },
+  {
+    queryLabel: '「紫がかった色が何本あるか」とホストに聞け',
+    group: 'purple', type: 'count_odd', threshold: 0,
+    trueLabel:  '奇数なら → 切断順を逆にしろ',
+    falseLabel: '偶数なら → そのまま切れ',
+  },
+  {
+    queryLabel: '「一番暗く見える色はどれか」とホストに聞け',
+    group: null, type: 'darkest_first', threshold: 0,
+    trueLabel:  'その色を → 最初に切れ',
+    falseLabel: '',
+  },
+  {
+    queryLabel: '「明るくて鮮やかな色が何本あるか」とホストに聞け',
+    group: 'bright', type: 'count_threshold', threshold: 2,
+    trueLabel:  '2本以上なら → 切断順を逆にしろ',
+    falseLabel: '2本未満なら → そのまま切れ',
+  },
+];
 
-  const seqIfTrue  = [...baseSeq].reverse();
-  const seqIfFalse = [...baseSeq];
-  const correctSeq = isTrue ? seqIfTrue : seqIfFalse;
+function generateRule(wireOrder, baseSeq) {
+  const tmpl = RULE_TEMPLATES[Math.floor(Math.random() * RULE_TEMPLATES.length)];
+  let seqIfTrue, seqIfFalse, correctSeq;
+
+  if (tmpl.type === 'darkest_first') {
+    const darkestId = wireOrder.reduce((a, b) =>
+      wireById(a).lum <= wireById(b).lum ? a : b
+    );
+    seqIfTrue  = [darkestId, ...baseSeq.filter(id => id !== darkestId)];
+    seqIfFalse = baseSeq;
+    correctSeq = seqIfTrue;
+  } else {
+    const count   = wireOrder.filter(id => wireById(id).groups.includes(tmpl.group)).length;
+    const condTrue = tmpl.type === 'count_odd' ? count % 2 === 1 : count >= tmpl.threshold;
+    seqIfTrue  = [...baseSeq].reverse();
+    seqIfFalse = [...baseSeq];
+    correctSeq = condTrue ? seqIfTrue : seqIfFalse;
+  }
 
   return {
-    checkId: checkWire.id,
-    checkName: checkWire.name,
-    threshold,
+    queryLabel: tmpl.queryLabel,
+    trueLabel:  tmpl.trueLabel,
+    falseLabel: tmpl.falseLabel,
     seqIfTrue,
     seqIfFalse,
-    correctSeq
+    correctSeq,
   };
 }
 
@@ -658,7 +709,7 @@ async function startRound(round, results, cleared, failed) {
     wireOrder,
     wireSequence: rule.correctSeq,
     wireCuts: [],
-    rule: { checkId: rule.checkId, checkName: rule.checkName, threshold: rule.threshold, seqIfTrue: rule.seqIfTrue, seqIfFalse: rule.seqIfFalse },
+    rule: { queryLabel: rule.queryLabel, trueLabel: rule.trueLabel, falseLabel: rule.falseLabel, seqIfTrue: rule.seqIfTrue, seqIfFalse: rule.seqIfFalse },
     playAgain: { host: false, guest: false }
   });
 }
@@ -864,6 +915,7 @@ function renderWirePanel(data) {
     div.style.setProperty('--wc-glow', wire.glow);
     div.innerHTML = `<span class="wire-num">${i + 1}</span>
       <div class="wire-cable-wrap"><div class="wire-cable"></div></div>
+      <span class="wire-name" style="color:${isCut?'#444':wire.color}">${wire.name}</span>
       <span class="wire-scissors">✂</span>`;
     if (!isCut) div.onclick = () => cutWire(wireId, i, data);
     panel.appendChild(div);
@@ -907,24 +959,23 @@ function renderWireManual(data) {
 
   // Rule box
   const rule = data.rule;
-  const checkWire = wireById(rule.checkId);
+  const seqHtml = seq => seq.map(id => {
+    const w = wireById(id);
+    return `<span class="rule-seq-item" style="color:${w.color};border-color:${w.color}44">${w.name}</span>`;
+  }).join('<span style="color:#2a4a2a;padding:0 2px">→</span>');
+
   document.getElementById('rule-display').innerHTML = `
     <div class="rule-title">━ 解除ルール ━</div>
-    <div class="rule-question">「<span style="color:${checkWire.color}">${rule.checkName}</span>のワイヤーが何本あるか？」とホストに聞け</div>
+    <div class="rule-question">${rule.queryLabel}</div>
     <div class="rule-branch">
-      <div class="rule-cond">${rule.threshold}本以上なら:</div>
-      <div class="rule-seq">${rule.seqIfTrue.map(id => {
-        const w = wireById(id);
-        return `<span class="rule-seq-item" style="color:${w.color};border-color:${w.color}44">${w.name}</span>`;
-      }).join('<span style="color:#2a4a2a;padding:0 2px">→</span>')}</div>
+      <div class="rule-cond">${rule.trueLabel}</div>
+      <div class="rule-seq">${seqHtml(rule.seqIfTrue)}</div>
     </div>
+    ${rule.falseLabel ? `
     <div class="rule-branch" style="margin-top:8px">
-      <div class="rule-cond">${rule.threshold}本未満なら:</div>
-      <div class="rule-seq">${rule.seqIfFalse.map(id => {
-        const w = wireById(id);
-        return `<span class="rule-seq-item" style="color:${w.color};border-color:${w.color}44">${w.name}</span>`;
-      }).join('<span style="color:#2a4a2a;padding:0 2px">→</span>')}</div>
-    </div>
+      <div class="rule-cond">${rule.falseLabel}</div>
+      <div class="rule-seq">${seqHtml(rule.seqIfFalse)}</div>
+    </div>` : ''}
   `;
 
   // Sequence list (show both but indicate which cuts already done)
