@@ -173,17 +173,23 @@
     .wire-item:active:not(.cut) { transform: scale(0.98); }
     .wire-item.cut { opacity: 0.35; cursor: default; }
     .wire-num { font-size: 0.72rem; color: #44444e; min-width: 18px; }
-    .wire-cable-wrap { flex: 1; height: 10px; display: flex; align-items: center; }
+    .wire-cable-wrap { flex: 1; height: 28px; display: flex; align-items: center; }
     .wire-cable {
-      width: 100%; height: 8px; border-radius: 4px;
-      background: var(--wc); box-shadow: 0 0 8px var(--wc-glow);
+      width: 100%; height: 24px; border-radius: 12px;
+      background: var(--wc); box-shadow: 0 0 10px var(--wc-glow);
+      display: flex; align-items: center; justify-content: center;
     }
     .wire-item.cut .wire-cable {
       background: repeating-linear-gradient(90deg, var(--wc) 0 44%, #111116 44% 56%, var(--wc) 56% 100%);
       box-shadow: none;
     }
-    .wire-name { font-size: 0.72rem; color: #888; min-width: 72px; text-align: right; }
-    .wire-item.cut .wire-name { color: #444; }
+    .wire-label {
+      font-size: 0.82rem; font-weight: 900; letter-spacing: 2px;
+      color: var(--tc);
+      text-shadow: 1px 1px 0 #000a, -1px -1px 0 #000a, 1px -1px 0 #000a, -1px 1px 0 #000a;
+      pointer-events: none; user-select: none;
+    }
+    .wire-item.cut .wire-label { opacity: 0.4; }
     .wire-scissors { font-size: 1.1rem; color: #555; transition: color 0.12s; margin-left: 4px; }
     .wire-item:not(.cut):hover .wire-scissors { color: #aaa; }
     .wire-item.cut .wire-scissors { color: #333; }
@@ -493,18 +499,13 @@ const db = firebase.database();
 
 // ===== CONSTANTS =====
 const WIRES = [
-  { id:'crimson',  name:'朱色',           color:'#C0392B', glow:'#C0392B55', lum:0.25, groups:['red','warm','dark'] },
-  { id:'coral',    name:'コーラル',       color:'#E8845A', glow:'#E8845A55', lum:0.60, groups:['red','orange','warm','bright'] },
-  { id:'wine',     name:'ワインレッド',   color:'#7D2340', glow:'#7D234055', lum:0.18, groups:['red','purple','dark'] },
-  { id:'magenta',  name:'マゼンタ',       color:'#C0187A', glow:'#C0187A55', lum:0.35, groups:['red','purple','bright'] },
-  { id:'lavender', name:'ラベンダー',     color:'#9B7FD4', glow:'#9B7FD455', lum:0.58, groups:['purple','cool','bright'] },
-  { id:'indigo',   name:'インディゴ',     color:'#4A3090', glow:'#4A309055', lum:0.20, groups:['purple','blue','dark'] },
-  { id:'navy',     name:'ネイビー',       color:'#1A2C6B', glow:'#1A2C6B55', lum:0.10, groups:['blue','cool','dark'] },
-  { id:'teal',     name:'ティール',       color:'#1A8A80', glow:'#1A8A8055', lum:0.45, groups:['blue','green','cool'] },
-  { id:'cyan',     name:'シアン',         color:'#00B4CC', glow:'#00B4CC55', lum:0.70, groups:['blue','green','cool','bright'] },
-  { id:'emerald',  name:'エメラルド',     color:'#2E8B57', glow:'#2E8B5755', lum:0.50, groups:['green','cool'] },
-  { id:'sage',     name:'セージグリーン', color:'#7B9E6B', glow:'#7B9E6B55', lum:0.60, groups:['green','warm'] },
-  { id:'amber',    name:'アンバー',       color:'#D4860C', glow:'#D4860C55', lum:0.52, groups:['yellow','orange','warm','bright'] },
+  { id:'red',    name:'赤',  color:'#e03030', glow:'#e0303066' },
+  { id:'blue',   name:'青',  color:'#3878e8', glow:'#3878e866' },
+  { id:'yellow', name:'黄',  color:'#c8a800', glow:'#c8a80066' },
+  { id:'green',  name:'緑',  color:'#22a022', glow:'#22a02266' },
+  { id:'purple', name:'紫',  color:'#9030c0', glow:'#9030c066' },
+  { id:'orange', name:'橙',  color:'#d87020', glow:'#d8702066' },
+  { id:'white',  name:'白',  color:'#c8c8c8', glow:'#c8c8c844' },
 ];
 const ROUND_DURATIONS   = [80, 60, 45];
 const ROUND_WIRE_COUNTS = [5, 6, 7];
@@ -628,66 +629,28 @@ function generateWireOrder(count) {
   return shuffle(order.slice(0, count));
 }
 
-const RULE_TEMPLATES = [
-  {
-    queryLabel: '「赤やオレンジっぽい色が何本あるか」とホストに聞け',
-    group: 'warm', type: 'count_threshold', threshold: 2,
-    trueLabel:  '2本以上なら → 切断順を逆にしろ',
-    falseLabel: '2本未満なら → そのまま切れ',
-  },
-  {
-    queryLabel: '「海や空を連想させる色が何本あるか」とホストに聞け',
-    group: 'cool', type: 'count_threshold', threshold: 2,
-    trueLabel:  '2本以上なら → 切断順を逆にしろ',
-    falseLabel: '2本未満なら → そのまま切れ',
-  },
-  {
-    queryLabel: '「紫がかった色が何本あるか」とホストに聞け',
-    group: 'purple', type: 'count_odd', threshold: 0,
-    trueLabel:  '奇数なら → 切断順を逆にしろ',
-    falseLabel: '偶数なら → そのまま切れ',
-  },
-  {
-    queryLabel: '「一番暗く見える色はどれか」とホストに聞け',
-    group: null, type: 'darkest_first', threshold: 0,
-    trueLabel:  'その色を → 最初に切れ',
-    falseLabel: '',
-  },
-  {
-    queryLabel: '「明るくて鮮やかな色が何本あるか」とホストに聞け',
-    group: 'bright', type: 'count_threshold', threshold: 2,
-    trueLabel:  '2本以上なら → 切断順を逆にしろ',
-    falseLabel: '2本未満なら → そのまま切れ',
-  },
-];
+function generateStroopWires(count) {
+  const ids = WIRES.map(w => w.id);
+  // 見た目の色をランダムに選ぶ（重複あり）
+  const visuals = Array.from({length: count}, () => ids[Math.floor(Math.random() * ids.length)]);
+  // テキストは見た目と必ず違う色にする
+  const texts = visuals.map(vId => {
+    const others = ids.filter(id => id !== vId);
+    return others[Math.floor(Math.random() * others.length)];
+  });
+  return { wireVisuals: visuals, wireTexts: texts };
+}
 
-function generateRule(wireOrder, baseSeq) {
-  const tmpl = RULE_TEMPLATES[Math.floor(Math.random() * RULE_TEMPLATES.length)];
-  let seqIfTrue, seqIfFalse, correctSeq;
-
-  if (tmpl.type === 'darkest_first') {
-    const darkestId = wireOrder.reduce((a, b) =>
-      wireById(a).lum <= wireById(b).lum ? a : b
-    );
-    seqIfTrue  = [darkestId, ...baseSeq.filter(id => id !== darkestId)];
-    seqIfFalse = baseSeq;
-    correctSeq = seqIfTrue;
-  } else {
-    const count   = wireOrder.filter(id => wireById(id).groups.includes(tmpl.group)).length;
-    const condTrue = tmpl.type === 'count_odd' ? count % 2 === 1 : count >= tmpl.threshold;
-    seqIfTrue  = [...baseSeq].reverse();
-    seqIfFalse = [...baseSeq];
-    correctSeq = condTrue ? seqIfTrue : seqIfFalse;
-  }
-
-  return {
-    queryLabel: tmpl.queryLabel,
-    trueLabel:  tmpl.trueLabel,
-    falseLabel: tmpl.falseLabel,
-    seqIfTrue,
-    seqIfFalse,
-    correctSeq,
-  };
+function generateStroopRule(wireVisuals, wireTexts) {
+  const count = wireVisuals.length;
+  const sequence = shuffle(Array.from({length: count}, (_, i) => i));
+  // 各ステップでランダムに「テキスト基準」か「見た目基準」を選ぶ
+  const steps = sequence.map(idx => {
+    const criterion = Math.random() < 0.5 ? 'text' : 'visual';
+    const targetId  = criterion === 'text' ? wireTexts[idx] : wireVisuals[idx];
+    return { idx, criterion, targetId };
+  });
+  return { sequence, steps };
 }
 
 // ===== HOST =====
@@ -720,9 +683,8 @@ async function startMatch() {
 async function startRound(round, results, cleared, failed) {
   const wireCount = ROUND_WIRE_COUNTS[round - 1];
   const duration  = ROUND_DURATIONS[round - 1];
-  const wireOrder = generateWireOrder(wireCount);
-  const baseSeq   = shuffle([...wireOrder]);
-  const rule      = generateRule(wireOrder, baseSeq);
+  const stroop    = generateStroopWires(wireCount);
+  const stroopRule = generateStroopRule(stroop.wireVisuals, stroop.wireTexts);
   const math = generateMathProblem();
   const startTime = Date.now() + 5000;
 
@@ -737,10 +699,11 @@ async function startRound(round, results, cleared, failed) {
     mathExpr: math.expr,
     mathAnswer: math.answer,
     pinEntry: '',
-    wireOrder,
-    wireSequence: rule.correctSeq,
-    wireCuts: [],
-    rule: { queryLabel: rule.queryLabel, trueLabel: rule.trueLabel, falseLabel: rule.falseLabel, seqIfTrue: rule.seqIfTrue, seqIfFalse: rule.seqIfFalse },
+    wireVisuals:  stroop.wireVisuals,
+    wireTexts:    stroop.wireTexts,
+    wireSequence: stroopRule.sequence,
+    wireSteps:    stroopRule.steps,
+    wireCuts:     [],
     playAgain: { host: false, guest: false }
   });
 }
@@ -781,7 +744,7 @@ function handleStateChange(data) {
     }
   }
 
-  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + JSON.stringify(data.wireCuts);
+  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',');
   if (key === lastDataStr) return;
   lastDataStr = key;
 
@@ -933,42 +896,39 @@ function renderWirePanel(data) {
     document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
   });
   renderRoundBar('round-bar-bp2', data.round, data.results);
-  document.getElementById('wire-progress').textContent = `${cuts.length} / ${data.wireOrder.length} 切断済み`;
+  document.getElementById('wire-progress').textContent = `${cuts.length} / ${data.wireVisuals.length} 切断済み`;
 
   const panel = document.getElementById('wire-panel');
   panel.innerHTML = '';
-  data.wireOrder.forEach((wireId, i) => {
-    const wire  = wireById(wireId);
-    const isCut = cuts.includes(wireId + '_' + i);
-    const div   = document.createElement('div');
+  data.wireVisuals.forEach((visualId, i) => {
+    const visual = wireById(visualId);
+    const text   = wireById(data.wireTexts[i]);
+    const isCut  = cuts.includes(i);
+    const div    = document.createElement('div');
     div.className = 'wire-item' + (isCut ? ' cut' : '');
-    div.style.setProperty('--wc',      wire.color);
-    div.style.setProperty('--wc-glow', wire.glow);
-    div.innerHTML = `<span class="wire-num">${i + 1}</span>
-      <div class="wire-cable-wrap"><div class="wire-cable"></div></div>
-      <span class="wire-name" style="color:${isCut?'#444':wire.color}">${wire.name}</span>
+    div.style.setProperty('--wc',      visual.color);
+    div.style.setProperty('--wc-glow', visual.glow);
+    div.style.setProperty('--tc',      text.color);
+    div.innerHTML = `
+      <span class="wire-num">${i + 1}</span>
+      <div class="wire-cable-wrap">
+        <div class="wire-cable">
+          <span class="wire-label">${text.name}</span>
+        </div>
+      </div>
       <span class="wire-scissors">✂</span>`;
-    if (!isCut) div.onclick = () => cutWire(wireId, i, data);
+    if (!isCut) div.onclick = () => cutWire(i, data);
     panel.appendChild(div);
   });
 }
 
-async function cutWire(wireId, idx, data) {
-  const key  = wireId + '_' + idx;
-  const cuts = [...(data.wireCuts || []), key];
-  const step = cuts.length - 1;
-  const expectedKey = data.wireSequence[step] + '_' + data.wireOrder.indexOf(data.wireSequence[step]);
-
-  // Find correct index for this step
-  const usedIndices = (data.wireCuts || []).map(k => parseInt(k.split('_')[1]));
-  const correctId   = data.wireSequence[step];
-  let correctIdx    = -1;
-  for (let i = 0; i < data.wireOrder.length; i++) {
-    if (data.wireOrder[i] === correctId && !usedIndices.includes(i)) { correctIdx = i; break; }
-  }
+async function cutWire(idx, data) {
+  const cuts = [...(data.wireCuts || []), idx];
+  const step  = cuts.length - 1;
+  const correctIdx = data.wireSequence[step];
 
   playCut();
-  if (idx !== correctIdx || wireId !== correctId) {
+  if (idx !== correctIdx) {
     playError();
     setTimeout(() => roomRef.update({ state: 'round-end', roundResult: 'failed' }), 300);
     return;
@@ -988,63 +948,50 @@ function renderWireManual(data) {
   });
   renderRoundBar('round-bar-mp2', data.round, data.results);
 
-  const rule = data.rule;
+  const steps = data.wireSteps || [];
 
-  // seqをカラーチップで表示するヘルパー
-  const seqChips = seq => seq.map(id => {
-    const w = wireById(id);
-    return `<span class="step-seq-item" style="color:${w.color};border-color:${w.color}55;background:${w.color}11">${w.name}</span>`;
-  }).join('<span class="step-seq-arrow">→</span>');
+  // 各ステップの指示文を生成
+  const stepDesc = (step) => {
+    const w = wireById(step.targetId);
+    if (step.criterion === 'text') {
+      return `ラベルに <strong style="color:${w.color};text-shadow:0 0 6px ${w.color}88">&nbsp;${w.name}&nbsp;</strong> と書かれたワイヤー`;
+    } else {
+      return `見た目が <strong style="color:${w.color};text-shadow:0 0 6px ${w.color}88">${w.name}色</strong> のワイヤー`;
+    }
+  };
 
   document.getElementById('rule-display').innerHTML = `
-    <!-- STEP 1 -->
     <div class="step-block">
       <div class="step-header">
-        <div class="step-num">1</div>
-        <div class="step-label">ホストに質問する</div>
+        <div class="step-num">!</div>
+        <div class="step-label">ストループ解除 — 色と文字が一致しない！</div>
       </div>
-      <div class="step-question">${rule.queryLabel.replace('とホストに聞け','')}</div>
+      <div class="step-question" style="font-size:0.8rem;color:#7aff7a">
+        「ラベル」= ワイヤーに書かれた文字の色<br>
+        「見た目」= ワイヤー自体の色<br>
+        指示をよく読んでホストに伝えよ
+      </div>
     </div>
 
-    <!-- STEP 2 -->
     <div class="step-block">
       <div class="step-header">
-        <div class="step-num">2</div>
-        <div class="step-label">答えに応じて切断順を決める</div>
-      </div>
-      <div class="step-branch">
-        <div class="step-cond">${rule.trueLabel.split('→')[0].trim()} →</div>
-        <div class="step-seq">${seqChips(rule.seqIfTrue)}</div>
-      </div>
-      ${rule.falseLabel ? `
-      <div class="step-branch" style="margin-top:10px">
-        <div class="step-cond">${rule.falseLabel.split('→')[0].trim()} →</div>
-        <div class="step-seq">${seqChips(rule.seqIfFalse)}</div>
-      </div>` : ''}
-    </div>
-
-    <!-- STEP 3 -->
-    <div class="step-block">
-      <div class="step-header">
-        <div class="step-num">3</div>
-        <div class="step-label">この順番でホストに切らせる（${cuts.length}／${data.wireSequence.length} 完了）</div>
+        <div class="step-num">▶</div>
+        <div class="step-label">切断順（${cuts.length}／${steps.length} 完了）</div>
       </div>
       <div class="step-progress">
-        ${data.wireSequence.map((wireId, i) => {
-          const w       = wireById(wireId);
+        ${steps.map((step, i) => {
           const done    = i < cuts.length;
           const current = i === cuts.length;
           return `<div class="step-prog-item ${done ? 'done' : ''} ${current ? 'current' : ''}">
             <span class="step-prog-num">${i + 1}</span>
-            <span class="step-prog-name" style="color:${w.color}">${w.name}</span>
-            <span class="step-prog-mark">${done ? '✓' : current ? '← 今ここ' : ''}</span>
+            <span class="step-prog-name" style="font-size:0.85rem;font-weight:normal">${stepDesc(step)}</span>
+            <span class="step-prog-mark">${done ? '✓' : current ? '◀ 今ここ' : ''}</span>
           </div>`;
         }).join('')}
       </div>
     </div>
   `;
 
-  // sequence-display は rule-display 内に統合したので空にする
   document.getElementById('sequence-display').innerHTML = '';
 }
 
