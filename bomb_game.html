@@ -261,6 +261,32 @@
     .bomb-panel {
       background: #111116; border: 2px solid #2c2c36; border-radius: 14px;
       padding: 18px 16px; box-shadow: 0 0 40px #00000099, inset 0 0 20px #00000044;
+      position: relative; overflow: hidden;
+    }
+
+    /* BLACKOUT OVERLAY */
+    #blackout-overlay {
+      display: none; position: absolute; inset: 0;
+      background: #000; z-index: 60; border-radius: 14px;
+      pointer-events: auto;
+    }
+    #blackout-overlay.active { display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px; }
+    .bo-icon { font-size: 3rem; opacity: 0.25; }
+    .bo-text { font-size: 0.75rem; color: #333; letter-spacing: 3px; }
+
+    /* FLASHLIGHT BUTTON (manual side) */
+    #flashlight-btn {
+      width: 100%; padding: 18px 10px; border: 2px solid #4a4000; border-radius: 10px;
+      background: #1a1600; color: #666; font-family: 'Courier New', monospace;
+      font-size: 1rem; font-weight: bold; cursor: pointer;
+      transition: background 0.1s, border-color 0.1s, box-shadow 0.1s, color 0.1s;
+      user-select: none; -webkit-user-select: none; touch-action: none;
+      margin-top: 10px;
+    }
+    #flashlight-btn.lit {
+      background: #2a2000; border-color: #f0c020;
+      color: #ffe060; box-shadow: 0 0 18px #f0c02055, 0 0 40px #f0c02022;
     }
     .bomb-header {
       display: flex; justify-content: space-between; align-items: center;
@@ -599,6 +625,10 @@
     <div class="phase-badge">フェーズ 2 / 2</div>
     <div class="wire-list" id="wire-panel"></div>
     <div class="bomb-hint">ワイヤーをタップして切断 ✂</div>
+    <div id="blackout-overlay">
+      <div class="bo-icon">🔦</div>
+      <div class="bo-text">POWER FAILURE</div>
+    </div>
   </div>
 </div>
 
@@ -640,6 +670,7 @@
     <div class="phase-badge" style="text-align:center;color:#2a5a2a">フェーズ 2 / 2</div>
     <div class="rule-box" id="rule-display"></div>
     <div class="seq-list" id="sequence-display"></div>
+    <button id="flashlight-btn">💡 ライトで照らす<br><span style="font-size:0.72rem;font-weight:normal">（長押し）</span></button>
   </div>
 </div>
 
@@ -752,6 +783,7 @@ const TOTAL_ROUNDS = 3;
 // ===== STATE =====
 let roomId, role, roomRef, myName;
 let timerHandle, roundEndHandle, finalArmTimeoutHandle;
+let blackoutHandle = null, blackoutEndHandle = null;
 let timerStarted = false, phaseRendered = null;
 let lastDataStr = '';
 let selectedDifficulty = 'hard';
@@ -1181,6 +1213,7 @@ async function startRound(round, results, cleared, failed, diff) {
     swapReq:        null,
     playAgain: { host: false, guest: false },
     finalArm:  null,
+    blackout:  { active: false, light: false },
   });
 }
 
@@ -1216,6 +1249,11 @@ function handleStateChange(data) {
   handleSwapRequest(data);
   // ロビーの役割表示を更新
   updateLobbyRoleLabels();
+
+  // 停電オーバーレイ：キー重複チェックに関係なく毎回更新
+  if (data.state === 'phase2' && data.blackout) {
+    updateBlackoutOverlay(data.blackout);
+  }
 
   // Play again handler (match-end screen)
   if (data.state === 'match-end' && data.playAgain) {
@@ -1376,14 +1414,67 @@ function renderMathProblem(data) {
 
 // ===== PHASE 2: WIRES =====
 function enterPhase2(data) {
+  const isFirstEnter = phaseRendered !== 'p2';
   phaseRendered = 'p2';
   if (gameRole === 'bomber') {
     showScreen('bomb-p2');
     renderWirePanel(data);
+    updateBlackoutOverlay(data.blackout || {});
   } else {
     showScreen('manual-p2');
     renderWireManual(data);
+    setupFlashlightButton();
   }
+  // ホストが停電タイマーを管理（最初の入場時のみ）
+  if (isFirstEnter && role === 'host') {
+    scheduleBlackout();
+  }
+}
+
+function scheduleBlackout() {
+  clearTimeout(blackoutHandle);
+  clearTimeout(blackoutEndHandle);
+  // 10〜20秒後にランダムで停電を発生させる
+  const delay = (10 + Math.random() * 10) * 1000;
+  blackoutHandle = setTimeout(() => {
+    roomRef.child('blackout').update({ active: true });
+    // 15秒後に自動復旧
+    blackoutEndHandle = setTimeout(() => {
+      roomRef.child('blackout').update({ active: false, light: false });
+    }, 15000);
+  }, delay);
+}
+
+function updateBlackoutOverlay(blackout) {
+  const overlay = document.getElementById('blackout-overlay');
+  if (!overlay) return;
+  // 停電中かつライトが点灯していない場合のみオーバーレイを表示
+  const isBlind = blackout.active && !blackout.light;
+  overlay.classList.toggle('active', isBlind);
+}
+
+function setupFlashlightButton() {
+  const btn = document.getElementById('flashlight-btn');
+  if (!btn) return;
+  // 既存リスナーを除去（再レンダー時の重複防止）
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+
+  const down = () => {
+    fresh.classList.add('lit');
+    roomRef.child('blackout').update({ light: true });
+  };
+  const up = () => {
+    fresh.classList.remove('lit');
+    roomRef.child('blackout').update({ light: false });
+  };
+
+  fresh.addEventListener('mousedown',   down);
+  fresh.addEventListener('touchstart',  down, { passive: true });
+  fresh.addEventListener('mouseup',     up);
+  fresh.addEventListener('mouseleave',  up);
+  fresh.addEventListener('touchend',    up);
+  fresh.addEventListener('touchcancel', up);
 }
 
 function renderWirePanel(data) {
@@ -1614,9 +1705,12 @@ function renderWireManual(data) {
 
 // ===== FINAL ARM =====
 function enterFinalArm(data) {
-  // タイマー停止・BGM停止
+  // タイマー停止・BGM停止・停電タイマー停止
   clearTimeout(timerHandle);
   clearTimeout(finalArmTimeoutHandle);
+  clearTimeout(blackoutHandle);
+  clearTimeout(blackoutEndHandle);
+  if (role === 'host') roomRef.child('blackout').update({ active: false, light: false });
   stopBGM();
   timerStarted = false;
   showScreen('final-arm');
@@ -1740,6 +1834,8 @@ function startTimer(startTime, duration) {
 // ===== REVIEW (答え合わせ) =====
 function enterReview(data) {
   clearTimeout(timerHandle);
+  clearTimeout(blackoutHandle);
+  clearTimeout(blackoutEndHandle);
   stopBGM();
   timerStarted = false;
   phaseRendered = null;
@@ -2130,6 +2226,8 @@ function backToTitle() {
   clearTimeout(timerHandle);
   clearTimeout(roundEndHandle);
   clearTimeout(finalArmTimeoutHandle);
+  clearTimeout(blackoutHandle);
+  clearTimeout(blackoutEndHandle);
   stopBGM();
   timerStarted = false; phaseRendered = null; lastDataStr = '';
   storedThinking = { host: false, guest: false };
