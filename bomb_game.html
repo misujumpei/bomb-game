@@ -657,6 +657,17 @@
       display: none;
     }
     .match-names { color: #555; font-size: 0.82rem; margin-bottom: 20px; }
+    .me-btn-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .me-btn-row .btn { margin-bottom: 0; font-size: 0.88rem; padding: 12px 8px; }
+    .btn-cyan { background: #0a3a4a; color: #40d0ff; border: 1px solid #1a5a6a; }
+    .btn-cyan:active:not(:disabled) { transform: scale(0.97); }
+    .me-voted-pa   { border: 2px solid #f0c020 !important; }
+    .me-voted-rl   { border: 2px solid #40d0ff !important; }
+    .return-lobby-notify {
+      color: #40d0ff; font-size: 0.85rem; margin: 0 0 10px;
+      padding: 10px; background: #031520; border: 1px solid #1a4a5a; border-radius: 8px;
+      display: none;
+    }
 
     /* COUNTDOWN */
     #countdown-overlay {
@@ -1004,7 +1015,11 @@
     <p class="match-names" id="me-names"></p>
     <div class="round-results" id="me-rounds"></div>
     <div class="play-again-notify" id="play-again-notify"></div>
-    <button class="btn btn-yellow" id="play-again-btn" onclick="votePlayAgain()" style="margin-bottom:10px">もう一度遊ぶ</button>
+    <div class="return-lobby-notify" id="return-lobby-notify"></div>
+    <div class="me-btn-row">
+      <button class="btn btn-yellow" id="play-again-btn" onclick="votePlayAgain()">🔁 同設定で再挑戦</button>
+      <button class="btn btn-cyan"   id="return-lobby-btn" onclick="voteReturnLobby()">🏠 ロビーへ戻る</button>
+    </div>
     <button class="btn btn-gray" onclick="backToTitle()">タイトルに戻る</button>
   </div>
 </div>
@@ -1500,7 +1515,8 @@ async function startRound(round, results, cleared, failed, diff) {
     wireCuts:       [],
     gameRoles:      storedGameRoles,
     swapReq:        null,
-    playAgain: { host: false, guest: false },
+    playAgain:   { host: false, guest: false },
+    returnLobby: { host: false, guest: false },
     finalArm:  null,
     blackout:     { active: false, light: false },
     penaltyMs:    0,
@@ -1576,18 +1592,41 @@ function handleStateChange(data) {
     }
   }
 
-  // Play again handler (match-end screen)
-  if (data.state === 'match-end' && data.playAgain) {
+  // match-end: playAgain / returnLobby 投票ハンドラ（キー重複チェックより前）
+  if (data.state === 'match-end') {
     const otherKey  = role === 'host' ? 'guest' : 'host';
     const otherName = role === 'host' ? data.guestName : data.hostName;
-    const notify    = document.getElementById('play-again-notify');
-    if (data.playAgain[otherKey] && !data.playAgain[role]) {
-      notify.textContent = `${otherName || '相手'}がまだあなたと遊びたがっています！`;
-      notify.style.display = 'block';
-    }
-    if (data.playAgain.host && data.playAgain.guest && role === 'host') {
+    const pa = data.playAgain   || {};
+    const rl = data.returnLobby || {};
+    const paNotify = document.getElementById('play-again-notify');
+    const rlNotify = document.getElementById('return-lobby-notify');
+
+    // 通知表示（相手が先に投票している場合）
+    if (pa[otherKey] && !pa[role] && !rl[role]) {
+      paNotify.textContent = `${otherName || '相手'}がもう一度遊びたがっています！`;
+      paNotify.style.display = 'block';
+    } else { paNotify.style.display = 'none'; }
+
+    if (rl[otherKey] && !rl[role] && !pa[role]) {
+      rlNotify.textContent = `${otherName || '相手'}がロビーに戻りたがっています！`;
+      rlNotify.style.display = 'block';
+    } else { rlNotify.style.display = 'none'; }
+
+    // ボタンの voted 表示を同期
+    const paBtn = document.getElementById('play-again-btn');
+    const rlBtn = document.getElementById('return-lobby-btn');
+    if (paBtn) { paBtn.classList.toggle('me-voted-pa', !!pa[role]); }
+    if (rlBtn) { rlBtn.classList.toggle('me-voted-rl', !!rl[role]); }
+
+    // 両者一致 → 再スタート
+    if (pa.host && pa.guest && role === 'host') {
       clearTimeout(roundEndHandle);
       startRound(1, {}, 0, 0, data.difficulty || 'hard');
+      return;
+    }
+    // 両者一致 → ロビー帰還
+    if (rl.host && rl.guest && role === 'host') {
+      resetToLobby(data);
       return;
     }
   }
@@ -1606,6 +1645,7 @@ function handleStateChange(data) {
   lastDataStr = key;
 
   switch (data.state) {
+    case 'waiting':    enterWaiting(data);   break;
     case 'phase1':     enterPhase1(data);    break;
     case 'tune':       enterTune(data);      break;
     case 'phase2':     enterPhase2(data);    break;
@@ -2845,14 +2885,75 @@ function enterMatchEnd(data) {
     return `<div class="round-result-chip ${ok ? 'ok' : 'ng'}">Round ${r}　${ok ? '✓' : '✗'}</div>`;
   }).join('');
 
-  document.getElementById('play-again-notify').style.display = 'none';
-  document.getElementById('play-again-btn').disabled = false;
+  document.getElementById('play-again-notify').style.display  = 'none';
+  document.getElementById('return-lobby-notify').style.display = 'none';
+  document.getElementById('play-again-btn').classList.remove('me-voted-pa');
+  document.getElementById('return-lobby-btn').classList.remove('me-voted-rl');
   showScreen('match-end');
 }
 
 async function votePlayAgain() {
-  document.getElementById('play-again-btn').disabled = true;
-  await roomRef.child('playAgain').update({ [role]: true });
+  // 排他制御: returnLobby の自分の票をリセット
+  await roomRef.update({ [`playAgain/${role}`]: true, [`returnLobby/${role}`]: false });
+}
+
+async function voteReturnLobby() {
+  // 排他制御: playAgain の自分の票をリセット
+  await roomRef.update({ [`returnLobby/${role}`]: true, [`playAgain/${role}`]: false });
+}
+
+// ===== LOBBY RETURN =====
+async function resetToLobby(data) {
+  // Firebase をウェイティング状態にリセット（難易度・名前・役割は保持）
+  await roomRef.update({
+    state:        'waiting',
+    round:         null,
+    duration:      null,
+    startTime:     null,
+    results:       null,
+    finalResults:  null,
+    clearedCount:  0,
+    failedCount:   0,
+    playAgain:     { host: false, guest: false },
+    returnLobby:   { host: false, guest: false },
+    mathExpr:      null, mathAnswer:  null, pinEntry:       null,
+    wireVisuals:   null, wireTexts:   null, wireSequence:   null,
+    wireSteps:     null, wireDecoys:  null, wireDecoyDescs: null,
+    wireCuts:      null, finalArm:    null, blackout:       null,
+    penaltyMs:     0,    bonusMs:     0,
+    tuneTarget:    null, tuneValue:   null, tuneKeepStart:  null, tuneStartTime: null,
+    p3GroupIdx:    null, p3Symbols:   null, p3Correct:      null, p3Pressed:     null,
+    swapReq:       null,
+  });
+}
+
+function enterWaiting(data) {
+  clearTimeout(timerHandle); clearTimeout(roundEndHandle);
+  clearTimeout(finalArmTimeoutHandle);
+  clearTimeout(blackoutHandle); clearTimeout(blackoutEndHandle);
+  stopBGM(); exitPanicMode(); cleanupTune();
+  timerStarted = false; phaseRendered = null; lastDataStr = '';
+
+  if (role === 'host') {
+    // ホスト: ロビー画面を再セットアップ
+    document.getElementById('room-code-display').textContent = roomId;
+    document.getElementById('host-name-disp').textContent = myName;
+    const guestReady = !!(data.guestReady && data.guestName);
+    const guestStatus = document.getElementById('guest-status');
+    guestStatus.textContent = guestReady
+      ? `✅ ${data.guestName}さんが参加しています！`
+      : '相手の参加を待っています...';
+    guestStatus.classList.toggle('pulse', !guestReady);
+    document.getElementById('start-btn').disabled = !guestReady;
+    document.getElementById('swap-btn-lobby').disabled = !guestReady;
+    updateLobbyRoleLabels();
+    showScreen('host-wait');
+  } else {
+    // ゲスト: 待機画面を再表示
+    document.getElementById('guest-name-disp').textContent = myName;
+    updateLobbyRoleLabels();
+    showScreen('guest-wait');
+  }
 }
 
 // ===== FLASH =====
@@ -2978,7 +3079,8 @@ function backToTitle() {
   timerStarted = false; phaseRendered = null; lastDataStr = '';
   storedThinking = { host: false, guest: false };
   document.getElementById('room-input').value = '';
-  document.getElementById('play-again-notify').style.display = 'none';
+  document.getElementById('play-again-notify').style.display  = 'none';
+  document.getElementById('return-lobby-notify').style.display = 'none';
   showScreen('title');
 }
 </script>
