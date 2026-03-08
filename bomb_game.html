@@ -67,6 +67,27 @@
     .wait-info { color: #555; font-size: 0.82rem; margin-bottom: 16px; }
     .wait-name  { color: #888; font-size: 0.9rem; margin-bottom: 20px; }
 
+    /* DIFFICULTY SELECTOR */
+    .diff-label { font-size: 0.7rem; letter-spacing: 3px; color: #444; margin-bottom: 8px; }
+    .diff-selector { display: flex; gap: 8px; margin-bottom: 16px; }
+    .diff-btn {
+      flex: 1; padding: 10px 4px; border: 1px solid #3a3a44; border-radius: 8px;
+      background: #16161e; color: #666; font-family: 'Courier New', monospace;
+      font-size: 0.8rem; cursor: pointer; transition: all 0.15s;
+    }
+    .diff-btn .diff-icon { font-size: 1.2rem; display: block; margin-bottom: 4px; }
+    .diff-btn.active-easy   { border-color: #22a022; background: #0a1a0a; color: #5aee5a; }
+    .diff-btn.active-normal { border-color: #a08800; background: #1a1600; color: #ffe060; }
+    .diff-btn.active-hard   { border-color: #c42020; background: #1a0a0a; color: #ff6060; }
+    .diff-info { font-size: 0.72rem; color: #3a3a5a; margin-bottom: 18px; line-height: 1.6; }
+    .diff-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 0.68rem; font-weight: bold; letter-spacing: 1px; margin-left: 6px;
+    }
+    .diff-badge-easy   { background: #0a1a0a; color: #5aee5a; border: 1px solid #22a022; }
+    .diff-badge-normal { background: #1a1600; color: #ffe060; border: 1px solid #a08800; }
+    .diff-badge-hard   { background: #1a0a0a; color: #ff6060; border: 1px solid #c42020; }
+
     /* ROUND INDICATOR */
     .round-bar {
       display: flex; align-items: center; justify-content: center;
@@ -350,6 +371,19 @@
     <div class="room-code" id="room-code-display"></div>
     <p class="wait-info">このコードを相手に伝えてください</p>
     <p class="wait-name">あなた：<span id="host-name-disp" style="color:#ccc"></span>（爆弾係）</p>
+    <p class="diff-label">— 難易度を選択 —</p>
+    <div class="diff-selector">
+      <button class="diff-btn" id="diff-easy" onclick="setDifficulty('easy')">
+        <span class="diff-icon">🟢</span>かんたん
+      </button>
+      <button class="diff-btn" id="diff-normal" onclick="setDifficulty('normal')">
+        <span class="diff-icon">🟡</span>ふつう
+      </button>
+      <button class="diff-btn active-hard" id="diff-hard" onclick="setDifficulty('hard')">
+        <span class="diff-icon">🔴</span>むずかしい
+      </button>
+    </div>
+    <p class="diff-info" id="diff-info-text">制限時間 80/60/45秒　ワイヤー 5/6/7本　複雑な計算</p>
     <p class="wait-info pulse" id="guest-status">相手の参加を待っています...</p>
     <button id="start-btn" class="btn btn-red" onclick="startMatch()" disabled style="margin-top:8px">ゲーム開始</button>
   </div>
@@ -507,8 +541,11 @@ const WIRES = [
   { id:'orange', name:'橙',  color:'#d87020', glow:'#d8702066' },
   { id:'white',  name:'白',  color:'#c8c8c8', glow:'#c8c8c844' },
 ];
-const ROUND_DURATIONS   = [80, 60, 45];
-const ROUND_WIRE_COUNTS = [5, 6, 7];
+const DIFFICULTY_SETTINGS = {
+  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], mathLevel: 'easy',   label: 'かんたん', badgeClass: 'diff-badge-easy' },
+  normal: { durations: [100,  80, 60], wireCounts: [4, 5, 5], mathLevel: 'normal', label: 'ふつう',   badgeClass: 'diff-badge-normal' },
+  hard:   { durations: [ 80,  60, 45], wireCounts: [5, 6, 7], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard' },
+};
 const TOTAL_ROUNDS = 3;
 
 // ===== STATE =====
@@ -516,6 +553,7 @@ let roomId, role, roomRef, myName;
 let timerHandle, roundEndHandle;
 let timerStarted = false, phaseRendered = null;
 let lastDataStr = '';
+let selectedDifficulty = 'hard';
 
 // ===== UTILS =====
 function shuffle(arr) {
@@ -584,9 +622,11 @@ function startBGM(speed = 550) {
 function stopBGM() { clearTimeout(bgmHandle); }
 
 // ===== ROUND BAR =====
-function renderRoundBar(elId, round, results) {
+function renderRoundBar(elId, round, results, difficulty) {
   const el = document.getElementById(elId);
   if (!el) return;
+  const diff = DIFFICULTY_SETTINGS[difficulty || 'hard'];
+  const badge = `<span class="diff-badge ${diff.badgeClass}">${diff.label}</span>`;
   el.innerHTML = '<span class="round-label">ROUND&nbsp;</span>' +
     Array.from({ length: TOTAL_ROUNDS }, (_, i) => {
       const r = i + 1;
@@ -595,14 +635,41 @@ function renderRoundBar(elId, round, results) {
       else if (results && results[r] === 'failed') cls = 'failed';
       else if (r === round) cls = 'current';
       return `<div class="round-dot ${cls}" title="Round ${r}"></div>`;
-    }).join('');
+    }).join('') + badge;
+}
+
+// ===== DIFFICULTY =====
+function setDifficulty(diff) {
+  selectedDifficulty = diff;
+  ['easy','normal','hard'].forEach(d => {
+    const btn = document.getElementById('diff-' + d);
+    btn.className = 'diff-btn' + (d === diff ? ' active-' + d : '');
+  });
+  const infos = {
+    easy:   '制限時間 120/100/80秒　ワイヤー 3/4/4本　たし算・ひき算',
+    normal: '制限時間 100/80/60秒　ワイヤー 4/5/5本　かけ算まで',
+    hard:   '制限時間 80/60/45秒　ワイヤー 5/6/7本　複雑な計算',
+  };
+  document.getElementById('diff-info-text').textContent = infos[diff];
 }
 
 // ===== MATH PROBLEM =====
 function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 
-function generateMathProblem() {
-  const templates = [
+function generateMathProblem(mathLevel) {
+  const easyTemplates = [
+    () => { const a=rand(10,50),b=rand(10,50); return {expr:`${a} + ${b}`, ans:a+b}; },
+    () => { const a=rand(20,80),b=rand(5,30); return a-b>=5?{expr:`${a} - ${b}`, ans:a-b}:null; },
+    () => { const a=rand(5,30),b=rand(5,30),c=rand(5,20); return {expr:`${a} + ${b} + ${c}`, ans:a+b+c}; },
+    () => { const a=rand(30,90),b=rand(5,25),c=rand(3,15); return a-b-c>=5?{expr:`${a} - ${b} - ${c}`, ans:a-b-c}:null; },
+  ];
+  const normalTemplates = [
+    () => { const a=rand(3,9),b=rand(3,9); return {expr:`${a} × ${b}`, ans:a*b}; },
+    () => { const a=rand(3,9),b=rand(3,9),c=rand(5,25); return {expr:`${a} × ${b} + ${c}`, ans:a*b+c}; },
+    () => { const a=rand(4,9),b=rand(4,9),p=a*b,c=rand(3,p-8); return p-c>=8?{expr:`${a} × ${b} - ${c}`, ans:p-c}:null; },
+    () => { const b=rand(2,5),a=b*rand(3,8); return {expr:`${a} ÷ ${b}`, ans:a/b}; },
+  ];
+  const hardTemplates = [
     () => { const a=rand(3,9),b=rand(3,9),c=rand(8,35); return {expr:`${a} × ${b} + ${c}`, ans:a*b+c}; },
     () => { const a=rand(4,9),b=rand(4,9),p=a*b,c=rand(5,p-12); return p-c>=10?{expr:`${a} × ${b} - ${c}`, ans:p-c}:null; },
     () => { const c=rand(3,7),a=rand(5,14),b=rand(5,14); return {expr:`(${a} + ${b}) × ${c}`, ans:(a+b)*c}; },
@@ -611,13 +678,14 @@ function generateMathProblem() {
     () => { const a=rand(5,9),b=rand(5,9),c=rand(2,4),d=rand(2,4); const v=a*b-c*d; return v>=15?{expr:`${a} × ${b} - ${c} × ${d}`, ans:v}:null; },
     () => { const a=rand(10,30),b=rand(2,6),c=rand(10,30); return {expr:`${a} × ${b} - ${c}`, ans:a*b-c}; },
   ];
-  let r;
-  let tries = 0;
+  const templates = mathLevel === 'easy' ? easyTemplates : mathLevel === 'normal' ? normalTemplates : hardTemplates;
+  const fallbacks = { easy: {expr:'23 + 45', ans:68}, normal: {expr:'6 × 7', ans:42}, hard: {expr:'7 × 8 + 34', ans:90} };
+  let r; let tries = 0;
   do {
     r = templates[Math.floor(Math.random()*templates.length)]();
     tries++;
-    if (tries > 50) { r = {expr:'7 × 8 + 34', ans:90}; break; }
-  } while (!r || r.ans < 10 || r.ans > 999 || !Number.isInteger(r.ans));
+    if (tries > 50) { r = fallbacks[mathLevel]; break; }
+  } while (!r || r.ans < 5 || r.ans > 999 || !Number.isInteger(r.ans));
   return { expr: r.expr, answer: String(r.ans) };
 }
 
@@ -677,15 +745,17 @@ async function becomeHost() {
 
 async function startMatch() {
   document.getElementById('start-btn').disabled = true;
-  await startRound(1, {}, 0, 0);
+  await roomRef.update({ difficulty: selectedDifficulty });
+  await startRound(1, {}, 0, 0, selectedDifficulty);
 }
 
-async function startRound(round, results, cleared, failed) {
-  const wireCount = ROUND_WIRE_COUNTS[round - 1];
-  const duration  = ROUND_DURATIONS[round - 1];
+async function startRound(round, results, cleared, failed, diff) {
+  const d = DIFFICULTY_SETTINGS[diff || 'hard'];
+  const wireCount = d.wireCounts[round - 1];
+  const duration  = d.durations[round - 1];
   const stroop    = generateStroopWires(wireCount);
   const stroopRule = generateStroopRule(stroop.wireVisuals, stroop.wireTexts);
-  const math = generateMathProblem();
+  const math = generateMathProblem(d.mathLevel);
   const startTime = Date.now() + 5000;
 
   await roomRef.update({
@@ -693,6 +763,7 @@ async function startRound(round, results, cleared, failed) {
     round,
     duration,
     startTime,
+    difficulty: diff || 'hard',
     results: results || {},
     clearedCount: cleared,
     failedCount: failed,
@@ -739,7 +810,7 @@ function handleStateChange(data) {
     }
     if (data.playAgain.host && data.playAgain.guest && role === 'host') {
       clearTimeout(roundEndHandle);
-      startRound(1, {}, 0, 0);
+      startRound(1, {}, 0, 0, data.difficulty || 'hard');
       return;
     }
   }
@@ -803,7 +874,7 @@ function renderPinPad(data) {
   ['bp1-host','bp1-guest'].forEach((id, i) => {
     document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
   });
-  renderRoundBar('round-bar-bp1', data.round, data.results);
+  renderRoundBar('round-bar-bp1', data.round, data.results, data.difficulty);
 
   const entry  = data.pinEntry || '';
   const total  = data.mathAnswer.length;
@@ -865,7 +936,7 @@ function renderMathProblem(data) {
   ['mp1-host','mp1-guest'].forEach((id, i) => {
     document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
   });
-  renderRoundBar('round-bar-mp1', data.round, data.results);
+  renderRoundBar('round-bar-mp1', data.round, data.results, data.difficulty);
 
   document.getElementById('math-expr').textContent = data.mathExpr;
 
@@ -895,7 +966,7 @@ function renderWirePanel(data) {
   ['bp2-host','bp2-guest'].forEach((id, i) => {
     document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
   });
-  renderRoundBar('round-bar-bp2', data.round, data.results);
+  renderRoundBar('round-bar-bp2', data.round, data.results, data.difficulty);
   document.getElementById('wire-progress').textContent = `${cuts.length} / ${data.wireVisuals.length} 切断済み`;
 
   const panel = document.getElementById('wire-panel');
@@ -946,7 +1017,7 @@ function renderWireManual(data) {
   ['mp2-host','mp2-guest'].forEach((id, i) => {
     document.getElementById(id).textContent = i === 0 ? (data.hostName || 'ホスト') : (data.guestName || 'ゲスト');
   });
-  renderRoundBar('round-bar-mp2', data.round, data.results);
+  renderRoundBar('round-bar-mp2', data.round, data.results, data.difficulty);
 
   const steps = data.wireSteps || [];
 
@@ -1087,7 +1158,7 @@ function enterRoundEnd(data) {
     document.getElementById('re-next').textContent = `次のラウンド（${data.round + 1}）へ...`;
     if (role === 'host') {
       roundEndHandle = setTimeout(() => {
-        startRound(data.round + 1, results, cleared, failedCnt);
+        startRound(data.round + 1, results, cleared, failedCnt, data.difficulty || 'hard');
       }, 4000);
     }
   }
