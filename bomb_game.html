@@ -918,25 +918,28 @@ function generateConditionalRule(wireVisuals, wireTexts, decoyCount) {
   // 切断順序をシャッフル（切るワイヤーのみ）
   const sequence = shuffle([...cutIndices]);
 
-  const steps = sequence.map((correctIdx) => {
+  const steps = sequence.map((correctIdx, stepIndex) => {
+    // このステップ実行時点で残っているワイヤー本数（stepIndex本すでに切断済み）
+    const remainingAtStep = totalCount - stepIndex;
+
     // 条件が TRUE か FALSE に解決するかを決める（~50/50）
     const condTrue = Math.random() < 0.5;
 
-    // 条件の種類をランダムに選ぶ（totalCount基準）
+    // 条件の種類をランダムに選ぶ（残り本数基準）
     const condType = Math.floor(Math.random() * 3);
     let condition;
     if (condType === 0) {
       const N = condTrue
-        ? Math.max(1, totalCount - Math.floor(Math.random() * 2))
-        : totalCount + 1 + Math.floor(Math.random() * 2);
+        ? Math.max(1, remainingAtStep - Math.floor(Math.random() * 2))
+        : remainingAtStep + 1 + Math.floor(Math.random() * 2);
       condition = { type: 'gte', value: N };
     } else if (condType === 1) {
       const N = condTrue
-        ? totalCount + Math.floor(Math.random() * 2)
-        : Math.max(1, totalCount - 1 - Math.floor(Math.random() * 1));
+        ? remainingAtStep + Math.floor(Math.random() * 2)
+        : Math.max(1, remainingAtStep - 1 - Math.floor(Math.random() * 1));
       condition = { type: 'lte', value: N };
     } else {
-      const actualParity = totalCount % 2 === 1 ? 'odd' : 'even';
+      const actualParity = remainingAtStep % 2 === 1 ? 'odd' : 'even';
       condition = { type: 'parity', value: condTrue ? actualParity : (actualParity === 'odd' ? 'even' : 'odd') };
     }
 
@@ -1314,9 +1317,9 @@ function renderWireManual(data) {
   // 条件テキスト生成
   function condLabel(cond) {
     if (!cond) return '';
-    if (cond.type === 'gte')    return `ワイヤーが <strong>${cond.value}本以上</strong>`;
-    if (cond.type === 'lte')    return `ワイヤーが <strong>${cond.value}本以下</strong>`;
-    if (cond.type === 'parity') return `ワイヤーの本数が <strong>${cond.value === 'odd' ? '奇数' : '偶数'}</strong>`;
+    if (cond.type === 'gte')    return `現在残っているワイヤーが <strong>${cond.value}本以上</strong>`;
+    if (cond.type === 'lte')    return `現在残っているワイヤーが <strong>${cond.value}本以下</strong>`;
+    if (cond.type === 'parity') return `現在残っているワイヤーの本数が <strong>${cond.value === 'odd' ? '奇数' : '偶数'}</strong>`;
     return '';
   }
 
@@ -1341,7 +1344,6 @@ function renderWireManual(data) {
           <div class="step-num" style="background:#1e7a1e;color:#afffaf">▶</div>
           <div class="step-label" style="color:#6aee6a">今ホストに伝えること（${cuts.length + 1}本目）</div>
         </div>
-        <div class="wire-count-hint">全 ${totalWires} 本</div>
         <div class="cond-block">
           <div class="cond-question">❓ ${condLabel(cond)} か？</div>
           <div class="cond-branch cond-branch-yes">
@@ -1489,14 +1491,17 @@ function renderReview(data) {
 }
 
 function renderReviewCond(step, data) {
-  const total = data.wireVisuals.length;
+  const totalWires = data.wireVisuals.length;
+  const cuts       = data.wireCuts || [];
+  // 失敗ステップ時点での残りワイヤー本数（= 全本数 - それまでの成功切断数）
+  const remaining  = totalWires - cuts.length;
   const cond  = step.condition;
 
   function condLabel(c) {
     if (!c) return '';
-    if (c.type === 'gte')    return `ワイヤーが <strong>${c.value}本以上</strong>`;
-    if (c.type === 'lte')    return `ワイヤーが <strong>${c.value}本以下</strong>`;
-    if (c.type === 'parity') return `ワイヤーの本数が <strong>${c.value === 'odd' ? '奇数' : '偶数'}</strong>`;
+    if (c.type === 'gte')    return `現在残っているワイヤーが <strong>${c.value}本以上</strong>`;
+    if (c.type === 'lte')    return `現在残っているワイヤーが <strong>${c.value}本以下</strong>`;
+    if (c.type === 'parity') return `現在残っているワイヤーの本数が <strong>${c.value === 'odd' ? '奇数' : '偶数'}</strong>`;
     return '';
   }
   function branchHtml(branch) {
@@ -1509,14 +1514,14 @@ function renderReviewCond(step, data) {
 
   let resolved = false;
   if (cond) {
-    if (cond.type === 'gte')    resolved = total >= cond.value;
-    else if (cond.type === 'lte')    resolved = total <= cond.value;
-    else if (cond.type === 'parity') resolved = (total % 2 === 1 ? 'odd' : 'even') === cond.value;
+    if (cond.type === 'gte')    resolved = remaining >= cond.value;
+    else if (cond.type === 'lte')    resolved = remaining <= cond.value;
+    else if (cond.type === 'parity') resolved = (remaining % 2 === 1 ? 'odd' : 'even') === cond.value;
   }
 
   return `
     <div class="rv-cond-block">
-      <div class="rv-cond-q">❓ ${condLabel(cond)} か？（全 ${total} 本）</div>
+      <div class="rv-cond-q">❓ ${condLabel(cond)} か？</div>
       <div class="rv-cond-row ${resolved ? 'rv-active' : 'rv-inactive'}">
         <span class="rv-yn rv-yes">YES</span>
         <span>${branchHtml(step.ifTrue)}</span>
