@@ -960,35 +960,68 @@ function renderWireManual(data) {
     }
   };
 
+  // 現在切るべきステップ
+  const currentStep = cuts.length < steps.length ? steps[cuts.length] : null;
+
+  // 現在の指示ボックス（マニュアル係が読み上げる用）
+  const currentBox = currentStep
+    ? `<div class="step-block" style="border-color:#3a7a3a;box-shadow:0 0 14px #00ff0022;margin-bottom:10px">
+        <div class="step-header">
+          <div class="step-num" style="background:#1e7a1e;color:#afffaf">▶</div>
+          <div class="step-label" style="color:#6aee6a">今ホストに伝えること（${cuts.length + 1}本目）</div>
+        </div>
+        <div style="font-size:1rem;line-height:1.7;padding:2px 0">${stepDesc(currentStep)}</div>
+       </div>`
+    : `<div class="step-block" style="border-color:#3a7a3a;text-align:center;padding:14px">
+        <span style="color:#5aff5a;font-size:1.1rem">全ワイヤー切断完了！</span>
+       </div>`;
+
+  // 進捗リスト（完了分は開示、未来分は隠す）
+  const progressRows = steps.map((step, i) => {
+    const done    = i < cuts.length;
+    const current = i === cuts.length;
+
+    if (done) {
+      // 実際に切ったワイヤーの情報を開示
+      const cutIdx = data.wireSequence[i];
+      const visual = wireById(data.wireVisuals[cutIdx]);
+      const text   = wireById(data.wireTexts[cutIdx]);
+      return `<div class="step-prog-item done">
+        <span class="step-prog-num">${i + 1}</span>
+        <span class="step-prog-name" style="font-size:0.8rem">
+          見た目 <strong style="color:${visual.color}">${visual.name}</strong>・
+          ラベル <strong style="color:${text.color}">${text.name}</strong>
+        </span>
+        <span class="step-prog-mark">✓</span>
+      </div>`;
+    }
+
+    // 現在 or 未来は隠す
+    return `<div class="step-prog-item ${current ? 'current' : ''}">
+      <span class="step-prog-num">${i + 1}</span>
+      <span class="step-prog-name" style="color:#2a3a2a;font-size:0.85rem">???</span>
+      <span class="step-prog-mark">${current ? '◀ 今ここ' : ''}</span>
+    </div>`;
+  }).join('');
+
   document.getElementById('rule-display').innerHTML = `
-    <div class="step-block">
+    <div class="step-block" style="margin-bottom:10px">
       <div class="step-header">
         <div class="step-num">!</div>
         <div class="step-label">ストループ解除 — 色と文字が一致しない！</div>
       </div>
-      <div class="step-question" style="font-size:0.8rem;color:#7aff7a">
+      <div class="step-question" style="font-size:0.78rem;color:#7aff7a">
         「ラベル」= ワイヤーに書かれた文字の色<br>
-        「見た目」= ワイヤー自体の色<br>
-        指示をよく読んでホストに伝えよ
+        「見た目」= ワイヤー自体の色
       </div>
     </div>
-
+    ${currentBox}
     <div class="step-block">
       <div class="step-header">
-        <div class="step-num">▶</div>
-        <div class="step-label">切断順（${cuts.length}／${steps.length} 完了）</div>
+        <div class="step-num" style="background:#1a2a1a;color:#3a7a3a">≡</div>
+        <div class="step-label">切断記録（${cuts.length}／${steps.length} 完了）</div>
       </div>
-      <div class="step-progress">
-        ${steps.map((step, i) => {
-          const done    = i < cuts.length;
-          const current = i === cuts.length;
-          return `<div class="step-prog-item ${done ? 'done' : ''} ${current ? 'current' : ''}">
-            <span class="step-prog-num">${i + 1}</span>
-            <span class="step-prog-name" style="font-size:0.85rem;font-weight:normal">${stepDesc(step)}</span>
-            <span class="step-prog-mark">${done ? '✓' : current ? '◀ 今ここ' : ''}</span>
-          </div>`;
-        }).join('')}
-      </div>
+      <div class="step-progress">${progressRows}</div>
     </div>
   `;
 
