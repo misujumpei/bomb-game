@@ -114,6 +114,31 @@
     .rv-nested-hit .rv-nested-header { color: #7aff7a; }
     .rv-cond-resolved { font-size: 0.72rem; color: #666; margin-left: auto; white-space: nowrap; }
 
+    /* PENALTY ANIMATION */
+    @keyframes timerPenalty {
+      0%   { color: inherit; text-shadow: none; transform: scale(1); }
+      15%  { color: #ff2828; text-shadow: 0 0 24px #ff000099; transform: scale(1.18); }
+      30%  { color: #ff9090; text-shadow: none; transform: scale(1); }
+      50%  { color: #ff2828; text-shadow: 0 0 20px #ff000077; transform: scale(1.12); }
+      70%  { color: #ff9090; text-shadow: none; transform: scale(1); }
+      85%  { color: #ff2828; text-shadow: 0 0 14px #ff000055; transform: scale(1.06); }
+      100% { color: inherit; text-shadow: none; transform: scale(1); }
+    }
+    .timer.penalty { animation: timerPenalty 0.75s ease-out; }
+
+    @keyframes floatUp {
+      0%   { opacity: 1; transform: translateY(0) scale(1); }
+      20%  { opacity: 1; transform: translateY(-8px) scale(1.1); }
+      100% { opacity: 0; transform: translateY(-48px) scale(0.85); }
+    }
+    .penalty-float {
+      position: fixed; pointer-events: none; z-index: 9999;
+      color: #ff2828; font-family: 'Courier New', monospace;
+      font-size: 1.15rem; font-weight: 900; letter-spacing: 2px;
+      text-shadow: 0 0 12px #ff000088;
+      animation: floatUp 1.3s ease-out forwards;
+    }
+
     /* FINAL ARM SCREEN */
     .fa-wrap { text-align: center; padding: 8px 0; }
     .fa-header { font-size: 0.65rem; letter-spacing: 5px; color: #c42020; margin-bottom: 8px; }
@@ -880,6 +905,7 @@ let roomId, role, roomRef, myName;
 let timerHandle, roundEndHandle, finalArmTimeoutHandle;
 let blackoutHandle = null, blackoutEndHandle = null;
 let timerStarted = false, phaseRendered = null;
+let penaltyMs = 0;
 let lastDataStr = '';
 let selectedDifficulty = 'hard';
 let storedHostName = 'ホスト', storedGuestName = 'ゲスト';
@@ -1309,7 +1335,8 @@ async function startRound(round, results, cleared, failed, diff) {
     swapReq:        null,
     playAgain: { host: false, guest: false },
     finalArm:  null,
-    blackout:  { active: false, light: false },
+    blackout:   { active: false, light: false },
+    penaltyMs:  0,
     p3GroupIdx: p3.p3GroupIdx,
     p3Symbols:  p3.p3Symbols,
     p3Correct:  p3.p3Correct,
@@ -1353,6 +1380,11 @@ function handleStateChange(data) {
   // 停電オーバーレイ：キー重複チェックに関係なく毎回更新
   if (data.state === 'phase2' && data.blackout) {
     updateBlackoutOverlay(data.blackout);
+  }
+
+  // タイムペナルティ：タイマーに即時反映（キー重複チェックより前）
+  if (data.state === 'phase1') {
+    penaltyMs = data.penaltyMs || 0;
   }
 
   // Play again handler (match-end screen)
@@ -1416,6 +1448,7 @@ function enterPhase1(data) {
   stopBGM();
   timerStarted = false;
   phaseRendered = null;
+  penaltyMs = data.penaltyMs || 0;
 
   const countdownDone = () => {
     phaseRendered = 'p1';
@@ -1486,10 +1519,22 @@ async function enterDigit(digit, data) {
   if (entry === data.mathAnswer) {
     await roomRef.update({ pinEntry: entry, state: 'phase2' });
   } else {
-    // Wrong answer — flash digits red then clear
+    // Wrong answer — apply -5s time penalty
     document.querySelectorAll('.pin-digit').forEach(el => el.classList.add('wrong'));
     playError();
-    setTimeout(() => roomRef.update({ pinEntry: '' }), 600);
+    const newPenaltyMs = (data.penaltyMs || 0) + 5000;
+    flashTimerPenalty();
+    // ペナルティで0秒以下になった場合は即タイムアウト
+    const elapsed = (Date.now() - data.startTime) / 1000;
+    const remaining = data.duration - elapsed - newPenaltyMs / 1000;
+    if (remaining <= 0) {
+      setTimeout(() => roomRef.update({
+        state: 'review', failedWireIdx: -1, failReason: 'timeout',
+        reviewReady: { host: false, guest: false }
+      }), 400);
+      return;
+    }
+    setTimeout(() => roomRef.update({ pinEntry: '', penaltyMs: newPenaltyMs }), 600);
   }
 }
 
@@ -2020,19 +2065,49 @@ async function pressFinalArmBtn() {
   });
 }
 
+// ===== PENALTY EFFECTS =====
+function showPenaltyFloat(refEl) {
+  if (!refEl) return;
+  const rect = refEl.getBoundingClientRect();
+  const floatEl = document.createElement('div');
+  floatEl.className = 'penalty-float';
+  floatEl.textContent = '-5 SEC!';
+  floatEl.style.left = (rect.left + rect.width / 2 - 36) + 'px';
+  floatEl.style.top  = (rect.top - 4) + 'px';
+  document.body.appendChild(floatEl);
+  setTimeout(() => floatEl.remove(), 1400);
+}
+
+function flashTimerPenalty() {
+  const visibleId = gameRole === 'bomber' ? 'timer-bp1' : 'timer-mp1';
+  ['timer-bp1', 'timer-mp1'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('penalty');
+    void el.offsetHeight; // reflow to restart animation
+    el.classList.add('penalty');
+    el.addEventListener('animationend', () => {
+      el.classList.remove('penalty');
+    }, { once: true });
+  });
+  showPenaltyFloat(document.getElementById(visibleId));
+}
+
 // ===== TIMER =====
 function startTimer(startTime, duration) {
   if (timerStarted) return;
   timerStarted = true;
   const ids = ['timer-bp1', 'timer-bp2', 'timer-bp3', 'timer-mp1', 'timer-mp2', 'timer-mp3'];
   const tick = () => {
-    const remaining = Math.max(0, duration - (Date.now() - startTime) / 1000);
+    const remaining = Math.max(0, duration - (Date.now() - startTime) / 1000 - penaltyMs / 1000);
     const disp = Math.ceil(remaining).toString().padStart(2, '0');
     ids.forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.textContent = disp;
-      el.className = 'timer' + (remaining < 10 ? ' danger' : remaining < 20 ? ' warn' : '');
+      if (!el.classList.contains('penalty')) {
+        el.className = 'timer' + (remaining < 10 ? ' danger' : remaining < 20 ? ' warn' : '');
+      }
     });
     if (remaining < 20 && bgmSpeed > 280) { bgmSpeed = Math.max(280, bgmSpeed - 5); }
     if (remaining <= 0) {
