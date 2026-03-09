@@ -897,16 +897,11 @@
     </div>
     <div class="section-title" style="margin-bottom:10px">📡 FREQ TUNING MODULE</div>
     <p class="tune-sub">マニュアルの指示に従ってスライダーを動かせ！</p>
-    <div class="tune-freq-display" id="tune-bomber-freq">500</div>
+    <div class="tune-freq-display" style="color:#1a3a5a;text-shadow:none">???</div>
     <div class="tune-freq-label">— CURRENT FREQUENCY —</div>
     <div class="tune-slider-wrap">
       <input type="range" class="tune-slider" id="tune-slider" min="0" max="1000" value="500"
              oninput="onSliderInput(+this.value)">
-    </div>
-    <div class="tune-keep-wrap">
-      <div class="tune-keep-label">— LOCK PROGRESS —</div>
-      <div class="tune-keep-bg"><div class="tune-keep-bar" id="tune-keep-bar-b"></div></div>
-      <div class="tune-keep-status" id="tune-keep-status-b">周波数を合わせろ！</div>
     </div>
   </div>
 </div>
@@ -2615,8 +2610,7 @@ function renderTuneBomber(data) {
   renderRoundBar('round-bar-bt', data.round, data.results, data.difficulty);
   const slider = document.getElementById('tune-slider');
   if (slider) slider.value = data.tuneValue || 500;
-  document.getElementById('tune-bomber-freq').textContent = data.tuneValue || 500;
-  updateTuneProgressUI(0);
+  // 数値・進捗バーは bomber には非表示のため更新しない
 }
 
 function renderTuneManual(data) {
@@ -2696,7 +2690,6 @@ function startTuneProgress() {
 
 function onSliderInput(val) {
   val = Math.round(val);
-  document.getElementById('tune-bomber-freq').textContent = val;
 
   const inRange = Math.abs(val - tuneSavedTarget) <= tuneSavedTolerance;
 
