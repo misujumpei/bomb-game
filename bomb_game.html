@@ -698,6 +698,39 @@
       display: none;
     }
 
+    /* PLAYSTYLE TITLE */
+    @keyframes titleGlow {
+      0%, 100% { text-shadow: 0 0 12px currentColor, 0 0 28px currentColor; opacity: 1; }
+      50%       { text-shadow: 0 0 24px currentColor, 0 0 56px currentColor, 0 0 80px currentColor; opacity: 0.85; }
+    }
+    @keyframes titleFadeIn {
+      from { opacity: 0; transform: translateY(14px) scale(0.92); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);    }
+    }
+    .playstyle-wrap {
+      margin: 14px 0 18px;
+      padding: 14px 16px 12px;
+      background: #07070f;
+      border: 1px solid #1e1e30;
+      border-radius: 12px;
+      animation: titleFadeIn 0.7s ease both;
+    }
+    .playstyle-label {
+      font-size: 0.58rem; letter-spacing: 4px; color: #2a3a4a;
+      margin-bottom: 8px; font-family: 'Courier New', monospace;
+    }
+    .playstyle-title {
+      font-size: 1.55rem; font-weight: 900; letter-spacing: 2px;
+      margin-bottom: 4px;
+      animation: titleGlow 2.2s ease-in-out infinite;
+    }
+    .playstyle-title.gold   { color: #ffd700; }
+    .playstyle-title.cyan   { color: #40e0ff; }
+    .playstyle-title.green  { color: #40ff88; }
+    .playstyle-title.red    { color: #ff5555; }
+    .playstyle-title.silver { color: #aabbcc; }
+    .playstyle-sub { font-size: 0.78rem; color: #4a5a6a; letter-spacing: 1px; }
+
     /* COUNTDOWN */
     #countdown-overlay {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9);
@@ -1111,6 +1144,11 @@
   <div class="match-end-wrap">
     <div class="match-end-emoji" id="me-emoji"></div>
     <div class="match-end-title" id="me-title"></div>
+    <div class="playstyle-wrap" id="me-playstyle" style="display:none">
+      <div class="playstyle-label">— PLAYSTYLE TITLE —</div>
+      <div class="playstyle-title" id="me-playstyle-title"></div>
+      <div class="playstyle-sub"   id="me-playstyle-sub"></div>
+    </div>
     <p class="match-names" id="me-names"></p>
     <div class="round-results" id="me-rounds"></div>
     <div class="play-again-notify" id="play-again-notify"></div>
@@ -1698,6 +1736,7 @@ async function startRound(round, results, cleared, failed, diff) {
     anomalyIdx:    null,
     anomalyTapped: null,
     anomalyStartTime: null,
+    ...(round === 1 ? { roundStats: {} } : {}),
   });
 }
 
@@ -2432,11 +2471,13 @@ function enterFinalArm(data) {
         const results = { ...(data.results || {}), [data.round]: 'success' };
         const cleared   = Object.values(results).filter(v => v === 'success').length;
         const failedCnt = Object.values(results).filter(v => v === 'failed').length;
+        const successTimeLeft = Math.max(0, Math.round(currentRemaining(data)));
+        const successStat = { penalties: Math.round((data.penaltyMs || 0) / 5000), timeLeft: successTimeLeft };
         setTimeout(() => {
           if (data.round >= TOTAL_ROUNDS) {
-            roomRef.update({ state: 'match-end', finalResults: results, clearedCount: cleared, failedCount: failedCnt });
+            roomRef.update({ state: 'match-end', finalResults: results, clearedCount: cleared, failedCount: failedCnt, [`roundStats/${data.round}`]: successStat });
           } else {
-            roomRef.update({ state: 'round-end', roundResult: 'success', results });
+            roomRef.update({ state: 'round-end', roundResult: 'success', results, [`roundStats/${data.round}`]: successStat });
           }
         }, 1800);
       } else {
@@ -3149,10 +3190,11 @@ function updateReviewReadyDisplay(reviewReady, data) {
     const results   = { ...(data.results || {}), [data.round]: 'failed' };
     const cleared   = Object.values(results).filter(v => v === 'success').length;
     const failedCnt = Object.values(results).filter(v => v === 'failed').length;
+    const failStat  = { penalties: Math.round((data.penaltyMs || 0) / 5000), timeLeft: 0 };
     if (data.round >= TOTAL_ROUNDS) {
-      roomRef.update({ state: 'match-end', finalResults: results, clearedCount: cleared, failedCount: failedCnt });
+      roomRef.update({ state: 'match-end', finalResults: results, clearedCount: cleared, failedCount: failedCnt, [`roundStats/${data.round}`]: failStat });
     } else {
-      roomRef.update({ state: 'round-end', roundResult: 'failed', results });
+      roomRef.update({ state: 'round-end', roundResult: 'failed', results, [`roundStats/${data.round}`]: failStat });
     }
   }
 }
@@ -3203,6 +3245,33 @@ function enterRoundEnd(data) {
   }
 }
 
+// ===== PLAYSTYLE TITLE =====
+function calculateTitle(data) {
+  const results = data.finalResults || data.results || {};
+  const rs      = data.roundStats  || {};
+  const rounds  = [1, 2, 3];
+
+  const successRounds  = rounds.filter(r => results[r] === 'success');
+  const failCount      = rounds.filter(r => results[r] === 'failed').length;
+  const allSuccess     = successRounds.length === TOTAL_ROUNDS;
+  const totalPenalties = rounds.reduce((sum, r) => sum + ((rs[r] || {}).penalties || 0), 0);
+  const avgTimeLeft    = successRounds.length > 0
+    ? successRounds.reduce((sum, r) => sum + ((rs[r] || {}).timeLeft || 0), 0) / successRounds.length
+    : 0;
+  const hasCloseCall   = successRounds.some(r => ((rs[r] || {}).timeLeft || 0) <= 5);
+
+  // 判定（優先度順）
+  if (allSuccess && totalPenalties === 0)
+    return { title: '阿吽の呼吸', sub: '💎 爆弾処理の神 — ノーミスパーフェクト！', color: 'gold' };
+  if (allSuccess && avgTimeLeft >= 20)
+    return { title: 'スピードスター', sub: '⚡ 余裕のクリア — 平均残り' + Math.round(avgTimeLeft) + '秒！', color: 'cyan' };
+  if (hasCloseCall)
+    return { title: 'ギリギリの魔術師', sub: '🌙 奇跡の綱渡り — 5秒以内クリアあり！', color: 'green' };
+  if (failCount >= 2 || totalPenalties >= 3)
+    return { title: 'ポンコツ処理班', sub: '💥 失敗' + failCount + '回 / ペナルティ' + totalPenalties + '回 — 次は頑張れ！', color: 'red' };
+  return { title: '一般処理班', sub: '🔧 見習い爆弾処理員 — まずまずのプレイ', color: 'silver' };
+}
+
 // ===== MATCH END =====
 function enterMatchEnd(data) {
   clearTimeout(timerHandle);
@@ -3221,6 +3290,14 @@ function enterMatchEnd(data) {
     const ok = res[r] === 'success';
     return `<div class="round-result-chip ${ok ? 'ok' : 'ng'}">Round ${r}　${ok ? '✓' : '✗'}</div>`;
   }).join('');
+
+  // 称号表示
+  const t = calculateTitle(data);
+  const titleEl = document.getElementById('me-playstyle-title');
+  titleEl.textContent = t.title;
+  titleEl.className   = 'playstyle-title ' + t.color;
+  document.getElementById('me-playstyle-sub').textContent = t.sub;
+  document.getElementById('me-playstyle').style.display = '';
 
   document.getElementById('play-again-notify').style.display  = 'none';
   document.getElementById('return-lobby-notify').style.display = 'none';
