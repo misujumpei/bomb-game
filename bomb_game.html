@@ -114,6 +114,35 @@
     .rv-nested-hit .rv-nested-header { color: #7aff7a; }
     .rv-cond-resolved { font-size: 0.72rem; color: #666; margin-left: auto; white-space: nowrap; }
 
+    /* ANOMALY MODULE */
+    .anomaly-sub { font-size: 0.75rem; color: #5a7088; margin-bottom: 12px; line-height: 1.5; }
+    .anomaly-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px;
+    }
+    .anomaly-cell {
+      aspect-ratio: 1; border-radius: 8px; border: 2px solid #1a1a2e;
+      background: #08080f; display: flex; align-items: center; justify-content: center;
+      padding: 10px; cursor: pointer; touch-action: manipulation;
+      transition: border-color 0.1s, transform 0.08s, box-shadow 0.1s;
+    }
+    .anomaly-cell:active:not(.manual-view) { transform: scale(0.88); }
+    .anomaly-cell.manual-view { cursor: default; }
+    .anomaly-cell svg { width: 100%; height: 100%; display: block; overflow: visible; }
+    /* Review: dual mini-grids */
+    .rv-anomaly-wrap { display: flex; gap: 10px; }
+    .rv-anomaly-half { flex: 1; min-width: 0; }
+    .rv-anomaly-label { font-size: 0.65rem; letter-spacing: 2px; color: #444; text-align: center; margin-bottom: 5px; }
+    .rv-anomaly-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
+    }
+    .rv-anomaly-cell {
+      aspect-ratio: 1; border-radius: 4px; border: 1.5px solid #141420;
+      background: #070710; display: flex; align-items: center; justify-content: center; padding: 4px;
+    }
+    .rv-anomaly-cell svg { width: 100%; height: 100%; display: block; }
+    .rv-anomaly-cell.hl-correct { border-color: #40ff80; box-shadow: 0 0 6px #40ff8066; }
+    .rv-anomaly-cell.hl-wrong   { border-color: #ff4040; box-shadow: 0 0 6px #ff404066; }
+
     /* TUNE: FREQUENCY MODULE */
     .tune-sub { font-size: 0.75rem; color: #5a7088; margin-bottom: 16px; line-height: 1.5; }
     .tune-freq-display {
@@ -910,6 +939,35 @@
   </div>
 </div>
 
+<!-- ANOMALY: FIND THE DIFFERENCE (BOMBER) -->
+<div id="screen-bomb-anomaly" class="screen">
+  <div class="bomb-panel" style="position:relative;overflow:hidden">
+    <div class="panel-header">
+      <span class="panel-label">💣 BOMBER</span>
+      <span class="timer" id="timer-ba">--</span>
+      <div id="round-bar-ba"></div>
+    </div>
+    <div class="section-title" style="margin-bottom:8px">🔍 ANOMALY MODULE</div>
+    <p class="anomaly-sub">マニュアルと見比べて、違うマスを見つけてタップせよ！</p>
+    <div class="anomaly-grid" id="anomaly-bomber-grid"></div>
+    <div id="anomaly-bomber-result" style="text-align:center;font-size:0.85rem;color:#5a7088;min-height:1.2em"></div>
+  </div>
+</div>
+
+<!-- ANOMALY: FIND THE DIFFERENCE (MANUAL) -->
+<div id="screen-manual-anomaly" class="screen">
+  <div class="manual-panel">
+    <div class="panel-header">
+      <span class="panel-label">📖 MANUAL</span>
+      <span class="timer" id="timer-ma">--</span>
+      <div id="round-bar-ma"></div>
+    </div>
+    <div class="section-title" style="margin-bottom:8px">🔍 ANOMALY MODULE</div>
+    <p class="anomaly-sub">こちらのグリッドと爆弾側のグリッドを口頭で比較せよ。1マスだけ違う！</p>
+    <div class="anomaly-grid anomaly-grid-manual" id="anomaly-manual-grid"></div>
+  </div>
+</div>
+
 <!-- PHASE 3: SYMBOL (BOMBER) -->
 <div id="screen-bomb-p3" class="screen">
   <div class="bomb-panel" style="position:relative;overflow:hidden">
@@ -996,7 +1054,11 @@
       <div class="rv-section-label">📖 マニュアルに表示されていた指示</div>
       <div id="rv-manual"></div>
     </div>
-    <div class="rv-section">
+    <div class="rv-section" id="rv-anomaly-section" style="display:none">
+      <div class="rv-section-label">🔍 アノマリーグリッド比較</div>
+      <div id="rv-anomaly"></div>
+    </div>
+    <div class="rv-section" id="rv-wires-section">
       <div class="rv-section-label">💣 爆弾パネルのワイヤー一覧</div>
       <div id="rv-wires"></div>
     </div>
@@ -1051,11 +1113,42 @@ const WIRES = [
   { id:'white',  name:'白',  color:'#c8c8c8', glow:'#c8c8c844' },
 ];
 const DIFFICULTY_SETTINGS = {
-  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], decoyCounts: [0, 0, 1], mathLevel: 'easy',   label: 'かんたん',   badgeClass: 'diff-badge-easy',   hasPhase3: false, p3Duration: 0,  hasTune: false, tuneTolerance: 10, tuneKeepMs: 2000 },
-  normal: { durations: [100,  80, 60], wireCounts: [4, 4, 5], decoyCounts: [0, 1, 1], mathLevel: 'normal', label: 'ふつう',     badgeClass: 'diff-badge-normal', hasPhase3: true,  p3Duration: 60, hasTune: true,  tuneTolerance: 6,  tuneKeepMs: 2500 },
-  hard:   { durations: [135, 105, 80], wireCounts: [4, 4, 5], decoyCounts: [1, 2, 2], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard',   hasPhase3: true,  p3Duration: 45, hasTune: true,  tuneTolerance: 3,  tuneKeepMs: 3000 },
+  easy:   { durations: [120, 100, 80], wireCounts: [3, 4, 4], decoyCounts: [0, 0, 1], mathLevel: 'easy',   label: 'かんたん',   badgeClass: 'diff-badge-easy',   hasPhase3: false, p3Duration: 0,  hasTune: false, tuneTolerance: 10, tuneKeepMs: 2000, hasAnomaly: false },
+  normal: { durations: [100,  80, 60], wireCounts: [4, 4, 5], decoyCounts: [0, 1, 1], mathLevel: 'normal', label: 'ふつう',     badgeClass: 'diff-badge-normal', hasPhase3: true,  p3Duration: 60, hasTune: true,  tuneTolerance: 6,  tuneKeepMs: 2500, hasAnomaly: true  },
+  hard:   { durations: [135, 105, 80], wireCounts: [4, 4, 5], decoyCounts: [1, 2, 2], mathLevel: 'hard',   label: 'むずかしい', badgeClass: 'diff-badge-hard',   hasPhase3: true,  p3Duration: 45, hasTune: true,  tuneTolerance: 3,  tuneKeepMs: 3000, hasAnomaly: true  },
 };
 const TOTAL_ROUNDS = 3;
+
+// ===== ANOMALY MODULE CONSTANTS =====
+const ANOMALY_COLORS = [
+  { hex: '#e63030', label: '赤' },
+  { hex: '#3060e6', label: '青' },
+  { hex: '#28c040', label: '緑' },
+  { hex: '#e6c020', label: '黄' },
+  { hex: '#e07020', label: '橙' },
+  { hex: '#9030e0', label: '紫' },
+  { hex: '#d0d8e0', label: '白' },
+];
+const ANOMALY_SHAPES = [
+  { id: 'circle',   label: '丸'   },
+  { id: 'triangle', label: '三角' },
+  { id: 'diamond',  label: '菱形' },
+  { id: 'square',   label: '四角' },
+  { id: 'star',     label: '星'   },
+  { id: 'cross',    label: '十字' },
+];
+function anomalyShapeSVG(shapeId, fill) {
+  const f = fill;
+  const shapes = {
+    circle:   `<circle cx="20" cy="20" r="17" fill="${f}"/>`,
+    triangle: `<polygon points="20,3 37,37 3,37" fill="${f}"/>`,
+    diamond:  `<polygon points="20,2 38,20 20,38 2,20" fill="${f}"/>`,
+    square:   `<rect x="3" y="3" width="34" height="34" fill="${f}"/>`,
+    star:     `<polygon points="20,2 24.5,14.5 38,14.5 27,22.5 31,36 20,28 9,36 13,22.5 2,14.5 15.5,14.5" fill="${f}"/>`,
+    cross:    `<rect x="14" y="2" width="12" height="36" fill="${f}"/><rect x="2" y="14" width="36" height="12" fill="${f}"/>`,
+  };
+  return `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">${shapes[shapeId]||''}</svg>`;
+}
 
 // ===== PHASE 3 SYMBOLS =====
 const SYMBOLS = [
@@ -1528,6 +1621,11 @@ async function startRound(round, results, cleared, failed, diff) {
     p3Symbols:  p3.p3Symbols,
     p3Correct:  p3.p3Correct,
     p3Pressed:  [],
+    anomalyBomber: null,
+    anomalyManual: null,
+    anomalyIdx:    null,
+    anomalyTapped: null,
+    anomalyStartTime: null,
   });
 }
 
@@ -1570,7 +1668,7 @@ function handleStateChange(data) {
   }
 
   // ペナルティ／ボーナス：タイマーに即時反映（キー重複チェックより前）
-  if (['phase1', 'tune', 'phase2', 'phase3'].includes(data.state)) {
+  if (['phase1', 'tune', 'phase2', 'anomaly', 'phase3'].includes(data.state)) {
     penaltyMs = data.penaltyMs || 0;
     bonusMs   = data.bonusMs   || 0;
   }
@@ -1639,8 +1737,9 @@ function handleStateChange(data) {
   const fa    = data.finalArm || {};
   const faFp  = (fa.hostTs ? 'H' : '') + (fa.guestTs ? 'G' : '');
   const p3Fp  = (data.p3Pressed || []).join('-');
-  const tuneK = data.state === 'tune' ? (data.tuneKeepStart ? 'K' : 'N') : '';
-  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',') + '_' + faFp + '_' + p3Fp + '_' + tuneK;
+  const tuneK    = data.state === 'tune' ? (data.tuneKeepStart ? 'K' : 'N') : '';
+  const anomalyK = data.state === 'anomaly' ? (data.anomalyTapped !== null && data.anomalyTapped !== undefined ? 'T' + data.anomalyTapped : 'N') : '';
+  const key = data.state + '_' + data.round + '_' + (data.pinEntry||'') + '_' + (data.wireCuts||[]).join(',') + '_' + faFp + '_' + p3Fp + '_' + tuneK + '_' + anomalyK;
   if (key === lastDataStr) return;
   lastDataStr = key;
 
@@ -1649,6 +1748,7 @@ function handleStateChange(data) {
     case 'phase1':     enterPhase1(data);    break;
     case 'tune':       enterTune(data);      break;
     case 'phase2':     enterPhase2(data);    break;
+    case 'anomaly':    enterAnomaly(data);   break;
     case 'phase3':     enterPhase3(data);    break;
     case 'final-arm':  enterFinalArm(data);  break;
     case 'review':     enterReview(data);    break;
@@ -1922,7 +2022,13 @@ async function cutWire(idx, data) {
   const bonus = bonusUpdate(data);
   if (cuts.length === data.wireSequence.length) {
     const ds = DIFFICULTY_SETTINGS[data.difficulty || 'hard'];
-    if (ds.hasPhase3) {
+    if (ds.hasAnomaly) {
+      const ad = generateAnomalyData();
+      const anomalyStartTime = Date.now() + 3000;
+      await roomRef.update({ wireCuts: cuts, state: 'anomaly', anomalyStartTime,
+        anomalyBomber: ad.anomalyBomber, anomalyManual: ad.anomalyManual,
+        anomalyIdx: ad.anomalyIdx, anomalyTapped: null, ...bonus });
+    } else if (ds.hasPhase3) {
       const p3StartTime = Date.now() + 4000;
       await roomRef.update({ wireCuts: cuts, state: 'phase3', p3StartTime, p3Duration: ds.p3Duration, ...bonus });
     } else {
@@ -2308,6 +2414,157 @@ async function pressFinalArmBtn() {
   });
 }
 
+// ===== ANOMALY MODULE =====
+function generateAnomalyData() {
+  // 3色・3形を palette として選出
+  const colorIdxs = shuffle([...Array(ANOMALY_COLORS.length).keys()]).slice(0, 3);
+  const shapeIdxs = shuffle([...Array(ANOMALY_SHAPES.length).keys()]).slice(0, 3);
+
+  // 16マスを palette からランダム生成（共通グリッド）
+  const base = Array.from({ length: 16 }, () => ({
+    c: colorIdxs[Math.floor(Math.random() * 3)],
+    s: shapeIdxs[Math.floor(Math.random() * 3)],
+  }));
+
+  // どちら側に異なるマスを持たせるか
+  const anomalyIdx = Math.floor(Math.random() * 16);
+  const changeColor = Math.random() < 0.5;
+
+  // 異なる値を選ぶ（同じにならないように）
+  let diffC = base[anomalyIdx].c;
+  let diffS = base[anomalyIdx].s;
+  if (changeColor) {
+    const others = colorIdxs.filter(i => i !== base[anomalyIdx].c);
+    diffC = others[Math.floor(Math.random() * others.length)];
+  } else {
+    const others = shapeIdxs.filter(i => i !== base[anomalyIdx].s);
+    diffS = others[Math.floor(Math.random() * others.length)];
+  }
+
+  const gridA = base.map((cell, i) => i === anomalyIdx ? { c: diffC, s: diffS } : { ...cell });
+  const gridB = base.map(cell => ({ ...cell }));
+
+  // どちらが bomber/manual かランダム
+  const bomberGetsAnomaly = Math.random() < 0.5;
+  return {
+    anomalyBomber: bomberGetsAnomaly ? gridA : gridB,
+    anomalyManual: bomberGetsAnomaly ? gridB : gridA,
+    anomalyIdx,
+  };
+}
+
+function enterAnomaly(data) {
+  phaseRendered = 'anomaly';
+  timerStarted = false;
+  const screen = gameRole === 'bomber' ? 'screen-bomb-anomaly' : 'screen-manual-anomaly';
+  showScreen(screen);
+  renderRoundBar(data, 'round-bar-ba');
+  renderRoundBar(data, 'round-bar-ma');
+
+  const grid = gameRole === 'bomber'
+    ? Object.values(data.anomalyBomber || {})
+    : Object.values(data.anomalyManual || {});
+
+  if (gameRole === 'bomber') {
+    renderAnomalyBomber(grid, data);
+  } else {
+    renderAnomalyManual(grid);
+  }
+  startTimer(data.anomalyStartTime, data.durations ? data.durations[data.round - 1] : 60);
+}
+
+function renderAnomalyBomber(grid, data) {
+  const container = document.getElementById('anomaly-bomber-grid');
+  if (!container) return;
+  const tapped = data.anomalyTapped !== null && data.anomalyTapped !== undefined;
+  container.innerHTML = grid.map((cell, i) => {
+    const color = ANOMALY_COLORS[cell.c];
+    const shape = ANOMALY_SHAPES[cell.s];
+    const isSelected = tapped && data.anomalyTapped === i;
+    const style = isSelected ? 'border-color:#ffe040;box-shadow:0 0 8px #ffe04099;' : '';
+    return `<div class="anomaly-cell" style="${style}" onclick="tapAnomalyCell(${i})" data-idx="${i}">
+      ${anomalyShapeSVG(shape.id, color.hex)}
+    </div>`;
+  }).join('');
+
+  const resultEl = document.getElementById('anomaly-bomber-result');
+  if (resultEl) resultEl.textContent = tapped ? `マス${data.anomalyTapped + 1} を選択中…` : '';
+}
+
+function renderAnomalyManual(grid) {
+  const container = document.getElementById('anomaly-manual-grid');
+  if (!container) return;
+  container.innerHTML = grid.map((cell) => {
+    const color = ANOMALY_COLORS[cell.c];
+    const shape = ANOMALY_SHAPES[cell.s];
+    return `<div class="anomaly-cell manual-view">
+      ${anomalyShapeSVG(shape.id, color.hex)}
+    </div>`;
+  }).join('');
+}
+
+async function tapAnomalyCell(idx) {
+  const snap = await roomRef.once('value');
+  const data = snap.val();
+  if (!data || data.state !== 'anomaly') return;
+  if (gameRole !== 'bomber') return;
+
+  if (idx === data.anomalyIdx) {
+    // 正解
+    const bonus = bonusUpdate(data);
+    const ds = DIFFICULTY_SETTINGS[data.difficulty || 'hard'];
+    if (ds.hasPhase3) {
+      const p3StartTime = Date.now() + 4000;
+      await roomRef.update({ anomalyTapped: idx, state: 'phase3', p3StartTime, p3Duration: ds.p3Duration, ...bonus });
+    } else {
+      await roomRef.update({ anomalyTapped: idx, state: 'final-arm', finalArm: { hostTs: null, guestTs: null }, ...bonus });
+    }
+  } else {
+    // 不正解
+    playError();
+    await roomRef.update({
+      state: 'review', failReason: 'wrong_anomaly', anomalyTapped: idx,
+      failedWireIdx: (data.wireCuts || []).length,
+      reviewReady: { host: false, guest: false },
+    });
+  }
+}
+
+function renderAnomalyReview(data) {
+  const container = document.getElementById('rv-anomaly');
+  if (!container) return;
+  const bomber = Object.values(data.anomalyBomber || {});
+  const manual = Object.values(data.anomalyManual || {});
+  const correctIdx = data.anomalyIdx;
+  const tappedIdx  = data.anomalyTapped;
+
+  function buildMiniGrid(grid, highlightCorrect, highlightWrong) {
+    return grid.map((cell, i) => {
+      const color = ANOMALY_COLORS[cell.c];
+      const shape = ANOMALY_SHAPES[cell.s];
+      let cls = 'rv-anomaly-cell';
+      if (highlightCorrect && i === correctIdx) cls += ' hl-correct';
+      if (highlightWrong  && i === tappedIdx && i !== correctIdx) cls += ' hl-wrong';
+      return `<div class="${cls}">${anomalyShapeSVG(shape.id, color.hex)}</div>`;
+    }).join('');
+  }
+
+  container.innerHTML = `
+    <div class="rv-anomaly-wrap">
+      <div class="rv-anomaly-half">
+        <div class="rv-anomaly-label">💣 BOMBER</div>
+        <div class="rv-anomaly-grid">${buildMiniGrid(bomber, true, true)}</div>
+      </div>
+      <div class="rv-anomaly-half">
+        <div class="rv-anomaly-label">📖 MANUAL</div>
+        <div class="rv-anomaly-grid">${buildMiniGrid(manual, false, false)}</div>
+      </div>
+    </div>
+    <p style="font-size:0.7rem;color:#5a7088;margin-top:8px;text-align:center">
+      緑枠：正解のマス　赤枠：タップしたマス
+    </p>`;
+}
+
 // ===== TUNE: FREQUENCY MODULE =====
 function generateTuneTarget() {
   // 端を避けて100-900の範囲でランダム生成
@@ -2580,7 +2837,7 @@ function flashTimerPenalty() {
 function startTimer(startTime, duration) {
   if (timerStarted) return;
   timerStarted = true;
-  const ids = ['timer-bp1', 'timer-bp2', 'timer-bp3', 'timer-bt', 'timer-mp1', 'timer-mp2', 'timer-mp3', 'timer-mt'];
+  const ids = ['timer-bp1', 'timer-bp2', 'timer-bp3', 'timer-bt', 'timer-ba', 'timer-mp1', 'timer-mp2', 'timer-mp3', 'timer-mt', 'timer-ma'];
   const tick = () => {
     const remaining = Math.max(0, duration - (Date.now() - startTime) / 1000 - penaltyMs / 1000 + bonusMs / 1000);
     const disp = Math.ceil(remaining).toString().padStart(2, '0');
@@ -2642,17 +2899,27 @@ function renderReview(data) {
     wrong_cut:    `${stepIdx + 1}本目：間違ったワイヤーを切ってしまった`,
     decoy:        `${stepIdx + 1}本目：切ってはいけないワイヤーを切ってしまった`,
     timeout:      `時間切れ（${stepIdx + 1}本目の途中）`,
-    wrong_symbol: 'フェーズ3：間違った順番でシンボルを押してしまった',
+    wrong_symbol:  'フェーズ3：間違った順番でシンボルを押してしまった',
+    wrong_anomaly: 'アノマリー：間違ったマスをタップしてしまった',
   };
   document.getElementById('rv-reason').textContent = reasonMap[failReason] || '';
 
+  const isAnomaly = failReason === 'wrong_anomaly';
+
   // マニュアルの指示セクション
   const step = data.wireSteps ? data.wireSteps[stepIdx] : null;
-  document.getElementById('rv-manual').innerHTML =
-    step ? renderReviewCond(step, data) : '<p style="color:#555;font-size:0.8rem">指示情報なし（最終ステップ完了後の失敗）</p>';
+  document.getElementById('rv-manual').innerHTML = isAnomaly
+    ? '<p style="color:#555;font-size:0.8rem">アノマリーフェーズ中に失敗したため、ワイヤー指示は無関係です。</p>'
+    : (step ? renderReviewCond(step, data) : '<p style="color:#555;font-size:0.8rem">指示情報なし（最終ステップ完了後の失敗）</p>');
+
+  // アノマリーセクション
+  const anomalySection = document.getElementById('rv-anomaly-section');
+  anomalySection.style.display = isAnomaly ? '' : 'none';
+  if (isAnomaly) renderAnomalyReview(data);
 
   // ワイヤー一覧セクション
-  document.getElementById('rv-wires').innerHTML = renderReviewWires(data, correctIdx, failIdx, failReason);
+  document.getElementById('rv-wires-section').style.display = isAnomaly ? 'none' : '';
+  document.getElementById('rv-wires').innerHTML = isAnomaly ? '' : renderReviewWires(data, correctIdx, failIdx, failReason);
 
   updateReviewReadyDisplay(data.reviewReady || {}, data);
 }
