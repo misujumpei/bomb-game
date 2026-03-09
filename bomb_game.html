@@ -436,6 +436,9 @@
     }
     #blackout-overlay.active { display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 10px; }
+    /* CSS安全ネット: bomb画面が非表示 or マニュアル役割では絶対に黒幕を出さない */
+    #screen-bomb-p2:not(.active) #blackout-overlay { display: none !important; }
+    body[data-gamerole="manual"] #blackout-overlay  { display: none !important; }
     .bo-icon { font-size: 3rem; opacity: 0.25; }
     .bo-text { font-size: 0.75rem; color: #333; letter-spacing: 3px; }
 
@@ -1767,14 +1770,15 @@ function handleStateChange(data) {
   if (data.gameRoles) {
     storedGameRoles = data.gameRoles;
     gameRole = storedGameRoles[role];
+    document.body.dataset.gamerole = gameRole; // CSS安全ネット用
   }
   // スワップリクエスト処理（キーチェックより先に行う）
   handleSwapRequest(data);
   // ロビーの役割表示を更新
   updateLobbyRoleLabels();
 
-  // 停電オーバーレイ：キー重複チェックに関係なく毎回更新
-  if (data.state === 'phase2' && data.blackout) {
+  // 停電オーバーレイ：爆弾係のみ・キー重複チェックに関係なく毎回更新
+  if (data.state === 'phase2' && data.blackout && gameRole === 'bomber') {
     updateBlackoutOverlay(data.blackout);
   }
 
@@ -2045,7 +2049,11 @@ function scheduleBlackout() {
 function updateBlackoutOverlay(blackout) {
   const overlay = document.getElementById('blackout-overlay');
   if (!overlay) return;
-  // 停電中かつライトが点灯していない場合のみオーバーレイを表示
+  // 爆弾係のみ暗転させる。マニュアル係は常に明るい状態を保つ
+  if (gameRole !== 'bomber') {
+    overlay.classList.remove('active');
+    return;
+  }
   const isBlind = blackout.active && !blackout.light;
   overlay.classList.toggle('active', isBlind);
 }
